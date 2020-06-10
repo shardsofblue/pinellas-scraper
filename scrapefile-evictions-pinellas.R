@@ -4,12 +4,11 @@
 
 ## Useage notes:
 # 1. Must have Java Development Environment installed. May require overriding Mac security settings at runtime via System Preferences::Security & Privacy::General::Run Anyway
-# 2. Requires a list of case numbers.
 
 #### Libaries Used ----
 library(tidyverse) # Tidy functions
 library(RSelenium) # Headless browser
-#library(rvest)
+library(rvest) # For extracting info from HTML
 #library(tidytext)
 #library(tidyr)
 #library(stringr)
@@ -115,7 +114,7 @@ temp <- remote_driver$findElement(using = "xpath",
                                   value = "/html/body/form/table[4]/tbody/tr/td/table/tbody/tr[14]/td[2]/input[1]")
 temp$clickElement()
 
-### View Cases of Interest
+### View and Store Cases of Interest
 
 ## Store case numbers pulled
 
@@ -124,6 +123,15 @@ temp <- remote_driver$findElements(using = "xpath",
                                        value = "/html/body/table[4]/tbody/tr")
 templen <- length(temp) - 2 # Records start at row 3
 print(paste0(as.character(templen), " records found."))
+
+
+# Note: Swith to rvest here
+pagesource <- remote_driver$getPageSource()
+mynodes <- read_html(pagesource[[1]])
+
+cases <- mynodes %>% 
+  html_nodes('tr:nth-child(3) td:nth-child(1)') %>% 
+  html_text()
 
 # For each row in table on page
 # Store contents of td[1] in evictions_cases_df$case_num
