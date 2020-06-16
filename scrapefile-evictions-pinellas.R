@@ -270,8 +270,4 @@ write.csv(all_cases_clean, "data/eviction_cases_jan2019_to_may2020.csv")
 #### Cleanup ----
 rD1$server$stop()
 
-
-
-
-write.csv(all_csvs_clean, "data/eviction_cases_jan2019_to_may2020.csv")
   
