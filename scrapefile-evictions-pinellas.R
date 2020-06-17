@@ -42,12 +42,15 @@ library(janitor) # For cleaning up scraped data
 
 ## Activate Headless Driver
 # Create and initialize driver
-rD1 <- rsDriver(browser = c("chrome"), 
-                port = 4960L, 
-                # To find Chrome ver. num., use binman::list_versions("chromedriver"); try multiple
-                chromever = "83.0.4103.39")
+# rD1 <- rsDriver(browser = c("chrome"), 
+#                 port = 4960L, 
+#                 # To find Chrome ver. num., use binman::list_versions("chromedriver"); try multiple
+#                 chromever = "83.0.4103.39")
 
-remote_driver <- rD1[["client"]] 
+rD2 <- rsDriver(browser = c("firefox"))
+
+#remote_driver <- rD1[["client"]] 
+remote_driver <- rD2[["client"]]
 
 # Send to webpage
 myurl <- remote_driver$navigate(
@@ -224,32 +227,152 @@ for(i in dates_ls) {
     # Get page HTML source code (stores as list)
     pagehtml <- remote_driver$getPageSource()
     
-    # Click the first document
-    # Goes to a page that includes all case "events"
     
+    # If there are "Other events and Hearings"
+    if (str_detect(pagehtml, "OTHER EVENTS AND HEARINGS") == TRUE) {
+      
+      # Store table of all avaliable documents, mainly for number of rows to check
+      # KI: Doesn't recognize that some aren't links
+      docs_df <- readHTMLTable(
+        pagehtml[[1]], # Pull the html from the list
+        which = 9) # Get the right table (the 9th one holds the info we need)
+      
+      # Look for a clickable document link
+      for (i in 1:nrow(docs_df)) {
+        # Try to collect an element into a list
+        temp <- remote_driver$findElements(using = "xpath",
+                                           value = paste0("/html/body/table[5]/tbody/tr[", i, "]/td[3]/b/a"))
+        # If the list length is greater than 0, it worked
+        if(length(temp) > 0) {
+          print(paste0("Link found at row ", i))
+          # Assign the link to temp to click
+          temp <- remote_driver$findElement(using = "xpath",
+                                             value = paste0("/html/body/table[5]/tbody/tr[", i, "]/td[3]/b/a"))
+          # Break the for loop; we only need to click one doc to see all available
+          break
+        } else {
+          print(paste0("No link found in row ", i))
+        }
+      }
+      # Click through
+      temp$clickElement()
+      
+      ## Click on each image in the case
+      
+      # Get page URL (we'll need it later)
+      pageurl <- remote_driver$getCurrentUrl()
+      
+      # Get page HTML source code (stores as list)
+      pagehtml <- remote_driver$getPageSource()
+      # Read in html as nodes
+      nodes <- read_html(pagehtml[[1]])
+      
+      # First, click the "Selected Event" document
+      # This will download into the computer's default downloads folder
+      # KIs: 
+      # Usually clicking the link will open a new window where the file will have to be downloaded from, but sometimes it will just download it immediately without opening that window.
+      # Cannot be solved with right-click -> "download linked file" because it's not a direct link; the server uses aspx to find the file.
+      temp <- remote_driver$findElement(using = "xpath",
+                                        value = "/html/body/table[3]/tbody/tr[2]/td[2]/a")
+      temp$clickElement()
+      
+      # Now move on to "Other Events" (and later, "Other Images")
+      # Check for rows with td; empty tables have ths but no tds
+      temp <- remote_driver$findElements(using = "xpath",
+                                         value = "/html/body/table[4]/tbody/tr[2]/td[1]")
+      if (length(temp) > 0 ) {
+        print("Files found.")
+        
+        # Get all rows
+        docs <- nodes %>% 
+          html_node('table:nth-child(8)') %>% 
+          html_table(fill = T)
+        
+        # For each row (starting at row 2)...
+        for (i in 2:nrow(docs)){
+          # Check the item is clickable...
+          temp <- remote_driver$findElements(using = "xpath",
+                                             value = paste0("/html/body/table[4]/tbody/tr[", i, "]/td[2]/a"))
+          if(length(temp) > 0){
+            # If it's clickable, choose it...
+            temp <- remote_driver$findElement(using = "xpath",
+                                              value = paste0("/html/body/table[4]/tbody/tr[", i, "]/td[2]/a"))
+            # And click it
+            temp$clickElement()
+            
+            # Now check to see if we went to a new page or are on the same page
+            # Get URL
+            temp_pageurl <- remote_driver$getCurrentUrl()[[1]]
+            
+            if(pageurl != temp_pageurl) {
+              # Test
+              #print("we're somewhere new!")
+              
+              # Download the file
+              # ??? Might need to use Firefox
+              
+              # The following is from:
+              # https://github.com/ropensci/wdman/issues/19
+              # remote_driver$queryRD(
+              #   ipAddr = paste0(remote_driver$serverURL, "/session/", remote_driver$sessionInfo[["id"]], "/chromium/send_command"),
+              #   method = "POST",
+              #   qdata = list(
+              #     cmd = "Page.setDownloadBehavior",
+              #     params = list(
+              #       behavior = "allow",
+              #       downloadPath = getwd()
+              #     )
+              #   )
+              # )
+              
+              # Go Back
+              remote_driver$goBack()
+            } else {
+              #print("we didn't move!")
+            }
+            
+            # KIs: 
+            # Usually clicking the link will open a new window where the file will have to be downloaded from, but sometimes it will just download it immediately without opening that window.
+            # Cannot be solved with right-click -> "download linked file" because it's not a direct link; the server uses aspx to find the file.
+            
+            # Ideas:
+            # Copy aspx link, navigate there in new tab, save the file, close the tab (IF it's still open), do it again
+            # Instead of opening a new window, let it open in the same one, then check the page address (or title). If it includes "ViewDocumentFragment", download and navigate Back. Otherwise, click the next link.
+          }
+        }
+        
+      } else {
+        print("No files found.")
+      }
+      
+      # Now do the same for "Other Images")
+      # Check for rows with td; empty tables have ths but no tds
+      temp <- remote_driver$findElements(using = "xpath",
+                                         value = "/html/body/table[5]/tbody/tr/td[1]")
+      if (length(temp) > 0 ) {
+        print("Files found.")
+      } else {
+        print("No files found.")
+      }
+    
+    
+      
+    
+    # for (rows in docs_df)
+    # go to tr nth child(i)
+    # if there's a link, click it
+    
+    ###################
     # Get page HTML source code (stores as list)
     pagehtml <- remote_driver$getPageSource()
-    
-    # Get all links on page
-    all_links <- remote_driver$findElements(using = "tag name",
-                                            value = "a") 
-    
-    getElementAttribute(all_links, 
-                        'href')
-    
-    all_links$getElementAttribute('href')
-    
-    # for (i in all_links) {
-    #   print(getElementAttribute(i, 'href'))
-    # }
-    
+    nodes <- read_html(pagehtml[[1]])
     
     # Store table of all avaliable documents
     # Doesn't recognize that some aren't links
     docs_df <- readHTMLTable(
       pagehtml[[1]], # Pull the html from the list
       which = 9) # Get the right table (the 9th one holds the info we need)
-      
+    
     # Clean up info
     docs_df_clean <- docs_df %>% 
       select(-V2, -V3) %>%
@@ -258,9 +381,9 @@ for(i in dates_ls) {
              "events_hearings_orders" = V4) %>%
       slice(-1) %>%
       mutate_if(is.factor, as.character)
+    ##########################
     
-    docs_df_clean %>% slice(1) %>%
-      pull(events_hearings_orders)
+    
     
     
     # Return to the search results page to click a new case
@@ -316,6 +439,7 @@ write.csv(all_cases_clean, "data/eviction_cases_jan2019_to_may2020.csv")
 
 #### Cleanup ----
 rD1$server$stop()
+rD2$server$stop()
 
 
 #### Sanity checks ----
