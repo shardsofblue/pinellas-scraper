@@ -26,6 +26,7 @@ library(XML)
 library(rvest) # For extracting info from HTML
 library(RCurl) # For extracting URL
 library(janitor) # For cleaning up scraped data
+#library(seleniumPipes) # For additional Selenium features
 #library(tidytext)
 #library(tidyr)
 #library(stringr)
@@ -218,6 +219,50 @@ for(i in dates_ls) {
     # Financial info (to pay, paid, balance)
     ## Download documents
     
+    ## Download Documents
+    
+    # Get page HTML source code (stores as list)
+    pagehtml <- remote_driver$getPageSource()
+    
+    # Click the first document
+    # Goes to a page that includes all case "events"
+    
+    # Get page HTML source code (stores as list)
+    pagehtml <- remote_driver$getPageSource()
+    
+    # Get all links on page
+    all_links <- remote_driver$findElements(using = "tag name",
+                                            value = "a") 
+    
+    getElementAttribute(all_links, 
+                        'href')
+    
+    all_links$getElementAttribute('href')
+    
+    # for (i in all_links) {
+    #   print(getElementAttribute(i, 'href'))
+    # }
+    
+    
+    # Store table of all avaliable documents
+    # Doesn't recognize that some aren't links
+    docs_df <- readHTMLTable(
+      pagehtml[[1]], # Pull the html from the list
+      which = 9) # Get the right table (the 9th one holds the info we need)
+      
+    # Clean up info
+    docs_df_clean <- docs_df %>% 
+      select(-V2, -V3) %>%
+      filter(!(V1 == "Party:")) %>%
+      rename("date_filed" = V1,
+             "events_hearings_orders" = V4) %>%
+      slice(-1) %>%
+      mutate_if(is.factor, as.character)
+    
+    docs_df_clean %>% slice(1) %>%
+      pull(events_hearings_orders)
+    
+    
     # Return to the search results page to click a new case
     temp <- remote_driver$findElement(using = "xpath",
                                       value = "/html/body/table[2]/tbody/tr/td/table/tbody/tr/td[1]/font/a[7]")
@@ -261,13 +306,23 @@ all_cases_clean <- all_cases %>%
   rename_all(~tolower(.)) %>%
   # Split out plaintif / defendants
   separate(col = `style/defendant info`,
-           into = c("plaintif", "defendant"),
+           into = c("plaintiff", "defendant"),
            sep = "vs\\."
-  )
+  ) %>%
+  # Strip newlines and carriage returns
+  mutate_all(~str_replace_all(., "[\r\n]" , ""))
 
 write.csv(all_cases_clean, "data/eviction_cases_jan2019_to_may2020.csv")
 
 #### Cleanup ----
 rD1$server$stop()
 
-  
+
+#### Sanity checks ----
+all_cases_clean <- read_csv("data/eviction_cases_jan2019_to_may2020.csv")
+
+all_cases_clean %>%
+  select(-X1) %>%
+  group_by(date_filed) %>%
+  summarize(count = n()) %>%
+  arrange(count)
