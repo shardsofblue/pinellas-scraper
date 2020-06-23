@@ -14,18 +14,20 @@
 ## KIs: 
 # 1. Only scrapes down one search level; does not click through each case for details.
 # 2. No exception catching, making the unsupervised loop risky. (I ran the loop then ran each missed month manually.)
-# 3. Requires user to provide a list of dates
 
 ## Useage notes:
 # 1. Must have Java Development Environment installed. May require overriding Mac security settings at runtime via System Preferences::Security & Privacy::General::Run Anyway
+# 2. Requires a hard-coded list of dates
 
 #### Libaries Used ----
 library(tidyverse) # Tidy functions
 library(RSelenium) # Headless browser
-library(XML)
+library(XML) # For extracting info from HTML
 library(rvest) # For extracting info from HTML
 library(RCurl) # For extracting URL
 library(janitor) # For cleaning up scraped data
+library(reticulate) # For injecting Python
+# library(httr) # For executing file downloads
 #library(seleniumPipes) # For additional Selenium features
 #library(tidytext)
 #library(tidyr)
@@ -42,15 +44,15 @@ library(janitor) # For cleaning up scraped data
 
 ## Activate Headless Driver
 # Create and initialize driver
-# rD1 <- rsDriver(browser = c("chrome"), 
-#                 port = 4960L, 
-#                 # To find Chrome ver. num., use binman::list_versions("chromedriver"); try multiple
-#                 chromever = "83.0.4103.39")
+rD1 <- rsDriver(browser = c("chrome"),
+                port = 4960L,
+                # To find Chrome ver. num., use binman::list_versions("chromedriver"); try multiple
+                chromever = "83.0.4103.39")
 
-rD2 <- rsDriver(browser = c("firefox"))
+# rD2 <- rsDriver(browser = c("firefox"))
 
-#remote_driver <- rD1[["client"]] 
-remote_driver <- rD2[["client"]]
+remote_driver <- rD1[["client"]]
+# remote_driver <- rD2[["client"]]
 
 # Send to webpage
 myurl <- remote_driver$navigate(
@@ -283,7 +285,7 @@ for(i in dates_ls) {
       if (length(temp) > 0 ) {
         print("Files found.")
         
-        # Get all rows
+        # Get all rows 
         docs <- nodes %>% 
           html_node('table:nth-child(8)') %>% 
           html_table(fill = T)
@@ -297,12 +299,30 @@ for(i in dates_ls) {
             # If it's clickable, choose it...
             temp <- remote_driver$findElement(using = "xpath",
                                               value = paste0("/html/body/table[4]/tbody/tr[", i, "]/td[2]/a"))
+            ## Use HTTR
+            # httr::GET( # setup cookies & session
+            #   url = pageurl[[1]],
+            #   httr::user_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36"),
+            #   httr::accept("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
+            #   verbose() # remove when done monitoring 
+            # ) -> res 
+            # 
+            # pg <- httr::content(res)
+            # html_nodes(pg, xpath="/html/body/table[4]/tbody/tr[2]/td[2]/a") %>% 
+            #   html_attr("href") -> dl_url
+            
+            # And save its URL
+            
             # And click it
-            temp$clickElement()
+            # temp$clickElement()
             
             # Now check to see if we went to a new page or are on the same page
             # Get URL
             temp_pageurl <- remote_driver$getCurrentUrl()[[1]]
+            
+            ## Check for timeout
+            #If you can find the search button, do the thing
+            #Else reload the driver and log back in
             
             if(pageurl != temp_pageurl) {
               # Test
@@ -434,6 +454,7 @@ all_cases_clean <- all_cases %>%
   ) %>%
   # Strip newlines and carriage returns
   mutate_all(~str_replace_all(., "[\r\n]" , ""))
+}
 
 write.csv(all_cases_clean, "data/eviction_cases_jan2019_to_may2020.csv")
 
