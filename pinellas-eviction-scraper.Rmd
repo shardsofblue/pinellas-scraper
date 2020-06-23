@@ -1,0 +1,573 @@
+---
+title: "pinellas-evictions-scrapefile"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Usage Notes
+
+* This program is built using pairs of functions: an action function and a user function that implements the action. This allows the scraper to check its location automatically before running each step and walk back as necessary.
+* Requires hard-coded range of dates. Use of one-month intervals is recommended.
+
+## Program Setup
+
+### Libraries
+
+```{r}
+library(tidyverse) # Tidy functions
+library(RSelenium) # Headless browser
+library(XML) # For extracting info from HTML
+library(seleniumPipes) # For additional Selenium features
+library(rvest) # For extracting info from HTML
+library(RCurl) # For extracting URL
+library(janitor) # For cleaning up scraped data
+library(reticulate) # For injecting Python
+```
+
+```{r}
+# create a new environment 
+# conda_create("r-reticulate")
+# 
+# # install Pandas
+# conda_install("r-reticulate", "pandas")
+# 
+# use_condaenv("r-reticulate")
+
+```
+
+### Set up headless browser
+
+```{r}
+## Activate Headless Driver
+# Create and initialize driver
+rD1 <- rsDriver(browser = c("chrome"),
+                port = 4960L,
+                # To find Chrome ver. num., use binman::list_versions("chromedriver"); try multiple
+                chromever = "83.0.4103.39")
+
+# rD2 <- rsDriver(browser = c("firefox"))
+
+remote_driver <- rD1[["client"]]
+# remote_driver <- rD2[["client"]]
+
+```
+
+## Website Navigation and Setup
+
+### Function to check for text on page
+
+```{r}
+
+check_for_text <- function(text, xpath) {
+  if(exists("remote_driver")){
+    # Get page HTML source code (stores as list)
+    pagehtml <- remote_driver$getPageSource()
+    # Read in html as nodes
+    nodes <- read_html(pagehtml[[1]])
+    
+    # Try to collect an element into a list
+    temp <- remote_driver$findElements(using = "xpath",
+                                       value = xpath)
+    # If the list length is greater than 0, the element exists
+    if(length(temp) > 0) {
+      # print("Found the element.")
+      if (as.character(temp[[1]]$getElementText()) == text) {
+        return(TRUE)
+      } else {
+        # print("Element text doesn't match search.")
+        return(FALSE)
+      }
+    } else {
+      # print("Element not found.")
+      return(FALSE)
+    }
+  } else {
+    # print("No remote driver detected.")
+    return(FALSE)
+  }
+}
+# Test
+# check_for_text(text = "Registered User Login",
+#                xpath = "/html/body/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/a[8]")
+```
+
+### Function to check for an element on a page
+
+```{r}
+
+check_for_element <- function(xpath) {
+  if(exists("remote_driver")){
+    # Get page HTML source code (stores as list)
+    pagehtml <- remote_driver$getPageSource()
+    # Read in html as nodes
+    nodes <- read_html(pagehtml[[1]])
+    
+    # Try to collect an element into a list
+    temp <- remote_driver$findElements(using = "xpath",
+                                       value = xpath)
+    # If the list length is greater than 0, the element exists
+    if(length(temp) > 0) {
+      # print("Found the element.")
+      return(TRUE)
+    } else {
+      # print("Element not found.")
+      return(FALSE)
+    }
+  } else {
+    # print("No remote driver detected.")
+    return(FALSE)
+  }
+}
+
+```
+
+### Send to webpage
+
+```{r}
+
+# Function to navigate to the Pinellas court system homepage
+navigate_to_pinellas_courts_home <- function() {
+  myurl <- remote_driver$navigate(
+  "https://ccmspa.pinellascounty.org/PublicAccess/default.aspx")
+}
+```
+
+```{r}
+# Run the function
+navigate_to_pinellas_courts_home()
+```
+
+### Log in
+
+```{r}
+# Function to log in to the Pinellas court system
+login_action <- function() {
+  # Locate and click the Registered User log-in
+  temp <- remote_driver$findElement(using = "xpath",
+                                    value ="/html/body/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/a[8]")
+  temp$clickElement()
+  
+  Sys.sleep(1)
+  # Enter username
+  temp <- remote_driver$findElement(using = "xpath",
+                                    value = "/html/body/form/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table/tbody/tr[1]/td/input")
+  temp$clickElement()
+  temp$sendKeysToElement(list("REG01506"))
+  
+  # Enter password
+  temp <- remote_driver$findElement(using = "xpath",
+                                    value = "/html/body/form/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table/tbody/tr[3]/td/input")
+  temp$clickElement
+  temp$sendKeysToElement(list("9ZbdYbpxPt8"))
+  
+  Sys.sleep(1)
+  # Click submit
+  temp <- remote_driver$findElement(using = "xpath",
+                                    value = "/html/body/form/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table/tbody/tr[6]/td/input")
+  temp$clickElement()
+}
+
+login_to_pinellas_courts <- function() {
+  # Check we're on the home page with the login link
+  if(check_for_text(text = "Registered User Login", xpath = "/html/body/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/a[8]") == TRUE) {
+    login_action()
+    } else {
+      # Go to the home page
+      navigate_to_pinellas_courts_home()
+      Sys.sleep(2)
+      # Look for login link
+      if(check_for_text(text = "Registered User Login", xpath = "/html/body/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/a[8]") == TRUE) {
+        login_action()
+      } else {
+        print("Already logged in.")
+      }
+    }
+}
+
+```
+
+```{r}
+
+# Run the function
+login_to_pinellas_courts()
+
+```
+
+### Store date ranges to scrape
+
+```{r}
+# Store series of date ranges in one-month intervals 
+dates_ls <- list(
+                 list("01/01/2019", "01/31/2019"), # 2019
+                 list("02/01/2019", "02/28/2019"),
+                 list("03/01/2019", "03/31/2019"),
+                 list("04/01/2019", "04/30/2019"),
+                 list("05/01/2019", "05/31/2019"),
+                 list("06/01/2019", "06/30/2019"),
+                 list("07/01/2019", "07/31/2019"),
+                 list("08/01/2019", "08/31/2019"),
+                 list("09/01/2019", "09/30/2019"),
+                 list("10/01/2019", "10/31/2019"),
+                 list("11/01/2019", "11/30/2019"),
+                 list("12/01/2019", "12/31/2019"),
+                 list("01/01/2020", "01/31/2020"), # 2020
+                 list("02/01/2020", "02/29/2020"),
+                 list("03/01/2020", "03/31/2020"),
+                 list("04/01/2020", "04/30/2020"),
+                 list("05/01/2020", "05/31/2020")
+                 )
+```
+
+### Enter court case search
+
+```{r}
+# Function to enter All Case Records Search
+enter_all_case_search_action <- function() {
+  temp <- remote_driver$findElement(using = "xpath",
+                                  value = "/html/body/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/a[1]")
+  temp$clickElement()
+}
+
+enter_all_case_search <- function() {
+  # Check we're on the page with the All Case Records Search link
+  if(check_for_text(text = "All Case Records Search", xpath = "/html/body/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/a[1]") == TRUE) {
+    enter_all_case_search_action()
+    } else {
+      # Go to the home page and log back in
+      login_to_pinellas_courts()
+      Sys.sleep(2)
+      # Look for All Case Records Search link
+      if(check_for_text(text = "All Case Records Search", xpath = "/html/body/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/a[1]") == TRUE) {
+        enter_all_case_search_action()
+      } else {
+        print("Error. Could not find records search link.")
+      }
+    }
+}
+
+```
+
+```{r}
+# Run the function
+enter_all_case_search()
+
+```
+
+## Begin Scrape
+
+### Functions to search a date range
+
+```{r}
+
+# Set the date range
+enter_date_range_action <- function(counter) {
+
+    # Set search use "Date Filed" 
+    temp <- remote_driver$findElement(using = "id",
+                                      value = "DateFiled")
+    temp$clickElement()
+    
+    ### Enter search criteria
+    
+    ## Dates
+    # Select Starting Date field
+    temp <- remote_driver$findElement(using = "xpath",
+                                      value = "/html/body/form/table[4]/tbody/tr/td/table/tbody/tr[6]/td[2]/table/tbody/tr/td/div/table/tbody/tr/td/table/tbody/tr[6]/td[2]/table/tbody/tr/td[1]/input")
+    temp$clickElement()
+    
+    # Clear text field
+    temp$clearElement()
+    
+    # Input starting date
+    temp$sendKeysToElement(list(dates_ls[[counter]][[1]]))
+    
+    # Select Ending Date field
+    temp <- remote_driver$findElement(using = "xpath",
+                                      value = "/html/body/form/table[4]/tbody/tr/td/table/tbody/tr[6]/td[2]/table/tbody/tr/td/div/table/tbody/tr/td/table/tbody/tr[6]/td[2]/table/tbody/tr/td[3]/input")
+    temp$clickElement()
+    
+    # Clear text field
+    temp$clearElement()
+    
+    # Input ending date
+    temp$sendKeysToElement(list(dates_ls[[counter]][[2]]))
+    
+    ## Case Types
+    # Choose "Delinquent Tenant/Eviction" cases
+    temp <- remote_driver$findElement(using = "xpath",
+                                      value = "/html/body/form/table[4]/tbody/tr/td/table/tbody/tr[11]/td[2]/table/tbody/tr/td/div/table/tbody/tr/td/table/tbody/tr/td[2]/select/option[6]")
+    
+    # Check whether it's already selected (JavaScript)
+    selected_status <- remote_driver$executeScript(
+      "return document.querySelector('#selCaseTypeGroups > option:nth-child(6)').selected", 
+      args = list("dummy")
+    )
+    
+    # If not selected, click it
+    if (!selected_status[[1]]){
+      temp$clickElement()
+    }
+    
+    ## Submit
+    temp <- remote_driver$findElement(using = "xpath",
+                                      value = "/html/body/form/table[4]/tbody/tr/td/table/tbody/tr[14]/td[2]/input[1]")
+    temp$clickElement()
+    
+    Sys.sleep(12)
+}
+
+enter_date_range <- function(x){
+  # Check we're on the page with the All Case Records Search title
+  if(check_for_text(text = "All Case Records Search", xpath = "/html/body/form/table[3]/tbody/tr/td[2]/font") == TRUE) {
+    enter_date_range_action(x)
+    
+    } else {
+      # Go back a step (this function will regress back to the start if necessary)
+      enter_all_case_search()
+      Sys.sleep(2)
+      # Look for All Case Records Search title
+      if(check_for_text(text = "All Case Records Search", xpath = "/html/body/form/table[3]/tbody/tr/td[2]/font") == TRUE) {
+        enter_date_range_action(x)
+      } else {
+        print("Error. Could not find searched text on page.")
+      }
+    }
+}
+
+```
+
+### Functions to store basic case info
+
+```{r}
+
+## Store basic case info
+store_basic_info_action <- function(counter) {
+  # Get page HTML source code (stores as list)
+  pagehtml <- remote_driver$getPageSource()
+  
+  # Get table
+  cases_df <- readHTMLTable(
+    pagehtml[[1]], # Pull the html from the list
+    which = 6) # Get the right table (the 6th one holds the info we need)
+  
+  # Clean up table (slightly)
+  cases_df_clean <- as_tibble(cases_df) %>%
+    drop_na() %>%
+    row_to_names(1) %>%
+    mutate_if(is.factor, as.character)
+  
+  if (counter < 10){
+    counter_ch <- paste0("00", as.character(counter))
+  } else if (counter < 100) {
+    counter_ch <- paste0("0", as.character(counter))
+  } else {
+    counter_ch <- as.character(counter)
+  }
+  
+  # Store the table in a CSV
+  write.csv(cases_df_clean, paste0('data/by-month/eviction_cases_', counter_ch, '.csv'))
+}
+
+# Checks for "Refine Search" to validate location
+store_basic_info <- function(x) {
+  if(check_for_text(text = "Refine Search", xpath = "/html/body/table[2]/tbody/tr/td/table/tbody/tr/td[1]/font/a[6]") == TRUE) {
+    store_basic_info_action(x)
+    } else {
+      # Go to the home page and log back in
+      login_to_pinellas_courts()
+      Sys.sleep(2)
+      enter_all_case_search()
+      Sys.sleep(1)
+      # Look for All Case Records Search link
+      if(check_for_text(text = "Refine Search", xpath = "/html/body/table[2]/tbody/tr/td/table/tbody/tr/td[1]/font/a[6]") == TRUE) {
+        store_basic_info_action(x)
+      } else {
+        print("Error. Could not find requested text.")
+      }
+    }
+}
+```
+
+
+### Function to return to All Case Records Search page
+
+```{r}
+# Function to return to the search start page to start again
+return_to_search <- function() {
+  if(check_for_text(text = "Refine Search", xpath = "/html/body/table[2]/tbody/tr/td/table/tbody/tr/td[1]/font/a[6]") == TRUE) {
+    
+    temp <- remote_driver$findElement(using = "xpath",
+                                      value = "/html/body/table[2]/tbody/tr/td/table/tbody/tr/td[1]/font/a[6]")
+    temp$clickElement()
+    Sys.sleep(1)
+    } else {
+      # Go to the home page and log back in
+      login_to_pinellas_courts()
+      Sys.sleep(2)
+      # Get into the All Case Search from there
+      enter_all_case_search()
+      Sys.sleep(1)
+    }
+}
+
+```
+
+### Scrape basic case info over a given date range
+
+```{r}
+# Run the scraper
+for(i in 1:length(dates_ls)) {
+  enter_date_range(i)
+  store_basic_info(i)
+  return_to_search()
+}
+
+```
+
+### Combine CSVs into a single file
+
+```{r}
+
+# Read in all CSVs
+all_cases <- list.files("data/by-month", 
+           "*.csv",
+           full.names=TRUE) %>%
+  map_dfr(read_csv) %>%
+  select(-'X1')
+
+# Clean up the combined dataframe
+all_cases_clean <- all_cases %>% 
+  # Drop empty columns
+  select(-`Citation Number`, -`Charge(s)`) %>%
+  # Break out date/location/officer
+  mutate(Date_Filed = str_sub(`Filed/Location/Judicial Officer`,1,10),
+         Location = str_sub(`Filed/Location/Judicial Officer`,11,20),
+         Judicial_Officer = str_sub(`Filed/Location/Judicial Officer`,21)
+  ) %>%
+  select(-`Filed/Location/Judicial Officer`) %>%
+  # Make everything lowercase
+  mutate_all(~tolower(.)) %>%
+  rename_all(~tolower(.)) %>%
+  # Split out plaintif / defendants
+  separate(col = `style/defendant info`,
+           into = c("plaintiff", "defendant"),
+           sep = "vs\\."
+  ) %>%
+  # Strip newlines and carriage returns
+  mutate_all(~str_replace_all(., "[\r\n]" , ""))
+
+write.csv(all_cases_clean, "data/eviction_cases_jan2019_to_may2020.csv")
+```
+
+## Collect more data about a case
+
+### View details about a case
+```{r}
+
+view_case_action <- function(x){
+  temp <- remote_driver$findElement(using = "xpath",
+                                      value = paste0("/html/body/table[4]/tbody/tr[", x+2, "]/td[1]/a"))
+    temp$clickElement()
+}
+
+
+view_case <- function(x){
+  if(check_for_element(xpath = "/html/body/table[4]/tbody/tr[3]/td[1]/a") == TRUE) {
+    view_case_action(x)
+    } else {
+      # Go to the home page and log back in
+      login_to_pinellas_courts()
+      Sys.sleep(2)
+      # Get into the All Case Search from there
+      enter_all_case_search()
+      Sys.sleep(1)
+      enter_date_range(1) #FLAG this must be dynamic but is currently hard-coded FLAG
+      view_case_action(x)
+    }
+}
+
+```
+
+### Return to the month's list of cases
+
+```{r}
+return_to_results_action <- function(){
+  # Return to the search results page to click a new case
+    temp <- remote_driver$findElement(using = "xpath",
+                                      value = "/html/body/table[2]/tbody/tr/td/table/tbody/tr/td[1]/font/a[7]")
+    temp$clickElement()
+}
+
+return_to_results <- function(){
+  if(check_for_element(xpath = "/html/body/table[2]/tbody/tr/td/table/tbody/tr/td[1]/font/a[7]")){
+    return_to_results_action()
+  } else {
+    # Go to the home page and log back in
+      login_to_pinellas_courts()
+      Sys.sleep(2)
+      # Get into the All Case Search from there
+      enter_all_case_search()
+      Sys.sleep(1)
+      enter_date_range(1) #FLAG this must be dynamic but is currently hard-coded FLAG
+  }
+}
+
+```
+
+## View details about a single case
+```{r}
+# Enter a date range
+enter_date_range(1)
+select_case(1)
+#Do things with that case: download docs and scrape address & financial info
+```
+
+### Download Documents
+Begin using Python here
+```{python}
+import pandas 
+
+```
+
+```{r}
+return_to_results()
+```
+
+
+
+# Iterate over all cases on a page
+```{r}
+# Check how many cases exist
+# Get page HTML source code (stores as list)
+pagehtml <- remote_driver$getPageSource()
+
+# Get table
+cases_df <- readHTMLTable(
+  pagehtml[[1]], # Pull the html from the list
+  which = 6) # Get the right table (the 6th one holds the info we need)
+
+# Clean up table (slightly)
+cases_df_clean <- as_tibble(cases_df) %>%
+  drop_na() %>%
+  row_to_names(1) %>%
+  mutate_if(is.factor, as.character)
+
+# Iterate over all cases
+for(i in 1:nrow(cases_df_clean)) {
+  print(i)
+  # This is where I put select_case(i)
+  # I must also change items that are FLAGed at this step
+}
+
+```
+
+## Cleanup
+
+```{r}
+# Stop the server
+rD1$server$stop()
+
+```
