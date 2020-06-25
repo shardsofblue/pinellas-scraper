@@ -16,7 +16,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ### Libraries
 
-```{r}
+```{r results='hide'}
 library(tidyverse) # Tidy functions
 library(RSelenium) # Headless browser
 library(XML) # For extracting info from HTML
@@ -27,20 +27,9 @@ library(janitor) # For cleaning up scraped data
 library(reticulate) # For injecting Python
 ```
 
-```{r}
-# create a new environment 
-# conda_create("r-reticulate")
-# 
-# # install Pandas
-# conda_install("r-reticulate", "pandas")
-# 
-# use_condaenv("r-reticulate")
-
-```
-
 ### Set up headless browser
 
-```{r}
+```{r results='hide', message=FALSE}
 ## Activate Headless Driver
 # Create and initialize driver
 rD1 <- rsDriver(browser = c("chrome"),
@@ -98,16 +87,15 @@ check_for_text <- function(text, xpath) {
 
 ```{r}
 
-check_for_element <- function(xpath) {
+check_for_element <- function(element_to_check, by = "xpath") {
   if(exists("remote_driver")){
     # Get page HTML source code (stores as list)
     pagehtml <- remote_driver$getPageSource()
     # Read in html as nodes
     nodes <- read_html(pagehtml[[1]])
-    
     # Try to collect an element into a list
-    temp <- remote_driver$findElements(using = "xpath",
-                                       value = xpath)
+    temp <- remote_driver$findElements(using = by,
+                                       value = element_to_check)
     # If the list length is greater than 0, the element exists
     if(length(temp) > 0) {
       # print("Found the element.")
@@ -124,7 +112,7 @@ check_for_element <- function(xpath) {
 
 ```
 
-### Send to webpage
+### Send to webpage function
 
 ```{r}
 
@@ -140,7 +128,7 @@ navigate_to_pinellas_courts_home <- function() {
 navigate_to_pinellas_courts_home()
 ```
 
-### Log in
+### Log in function
 
 ```{r}
 # Function to log in to the Pinellas court system
@@ -187,6 +175,14 @@ login_to_pinellas_courts <- function() {
     }
 }
 
+check_if_login_screen <- function(){
+  if(check_for_element("SignOn", by = "name")){
+    return(TRUE)
+  } else {
+    return(FALSE)
+  }
+}
+
 ```
 
 ```{r}
@@ -217,11 +213,12 @@ dates_ls <- list(
                  list("02/01/2020", "02/29/2020"),
                  list("03/01/2020", "03/31/2020"),
                  list("04/01/2020", "04/30/2020"),
-                 list("05/01/2020", "05/31/2020")
+                 list("05/01/2020", "05/31/2020"),
+                 list("06/01/2020", "06/30/2020")
                  )
 ```
 
-### Enter court case search
+### Enter court case search functions
 
 ```{r}
 # Function to enter All Case Records Search
@@ -418,18 +415,25 @@ return_to_search <- function() {
 ### Scrape basic case info over a given date range
 
 ```{r}
+# Set counter to store position in case of crash or timeout
+dates_ls_pos = 1
+
 # Run the scraper
-for(i in 1:length(dates_ls)) {
+for(i in dates_ls_pos:length(dates_ls)) {
   enter_date_range(i)
   store_basic_info(i)
   return_to_search()
+  dates_ls_pos <- dates_ls_pos + 1
 }
+
+# Reset the counter
+dates_ls_pos = 1
 
 ```
 
 ### Combine CSVs into a single file
 
-```{r}
+```{r results='hide', message=FALSE}
 
 # Read in all CSVs
 all_cases <- list.files("data/by-month", 
@@ -457,14 +461,20 @@ all_cases_clean <- all_cases %>%
            sep = "vs\\."
   ) %>%
   # Strip newlines and carriage returns
-  mutate_all(~str_replace_all(., "[\r\n]" , ""))
+  mutate_all(~str_replace_all(., "[\r\n]" , "")) %>%
+  # Clean up col names
+  rename_all(tolower) %>%
+  clean_names()
+```
 
-write.csv(all_cases_clean, "data/eviction_cases_jan2019_to_may2020.csv")
+### Store the data
+```{r}
+write.csv(all_cases_clean, "data/eviction_cases_May2020_to_june2020.csv")
 ```
 
 ## Collect more data about a case
 
-### View details about a case
+### View details about a case functions
 ```{r}
 
 view_case_action <- function(x){
@@ -475,8 +485,18 @@ view_case_action <- function(x){
 
 
 view_case <- function(x){
-  if(check_for_element(xpath = "/html/body/table[4]/tbody/tr[3]/td[1]/a") == TRUE) {
+  if(check_for_element("/html/body/table[4]/tbody/tr[3]/td[1]/a") == TRUE) {
     view_case_action(x)
+    if(check_if_login_screen() == TRUE){
+      # Go to the home page and log back in
+      login_to_pinellas_courts()
+      Sys.sleep(2)
+      # Get into the All Case Search from there
+      enter_all_case_search()
+      Sys.sleep(1)
+      enter_date_range(1) #FLAG this must be dynamic but is currently hard-coded FLAG
+      view_case_action(x)
+    }
     } else {
       # Go to the home page and log back in
       login_to_pinellas_courts()
@@ -491,7 +511,7 @@ view_case <- function(x){
 
 ```
 
-### Return to the month's list of cases
+### Return to the month's list of cases functions
 
 ```{r}
 return_to_results_action <- function(){
@@ -502,7 +522,7 @@ return_to_results_action <- function(){
 }
 
 return_to_results <- function(){
-  if(check_for_element(xpath = "/html/body/table[2]/tbody/tr/td/table/tbody/tr/td[1]/font/a[7]")){
+  if(check_for_element("/html/body/table[2]/tbody/tr/td/table/tbody/tr/td[1]/font/a[7]")){
     return_to_results_action()
   } else {
     # Go to the home page and log back in
@@ -521,16 +541,120 @@ return_to_results <- function(){
 ```{r}
 # Enter a date range
 enter_date_range(1)
-select_case(1)
+view_case(1)
 #Do things with that case: download docs and scrape address & financial info
 ```
 
-### Download Documents
-Begin using Python here
-```{python}
-import pandas 
+### Scrape case details
+
+#### Get financials (functions)
+
+```{r}
+
+# Get financials
+case_nrs <- all_cases_clean$`case number` %>% unique()
+fin_data<- data.frame(case_number= as.character(), 
+                          to_pay = as.character(), 
+                          paid = as.character(), 
+                          balance = as.character())
+
+get_financials_action <- function(){
+  pagesource <- remote_driver$getPageSource()
+  mynodes <- read_html(pagesource[[1]])
+  
+  if (str_detect(pagesource, "Financial Information") == TRUE) {
+    
+    temp <- remote_driver$findElements(using="class name",
+                                        value="ssCaseDetailCaseNbr")
+    casenr <- as.character(temp[[1]]$getElementText()) %>%
+      str_remove_all("(Case\\sNo\\.\\s)")
+    
+    #get financial information 
+    fins <- mynodes %>% 
+      html_nodes('#RCDFRPC1+ td , #RCDFRBD1+ td b , tr:nth-child(8) td:nth-child(7) , #RCDFRBFA1+ td') %>% 
+      html_text() %>% 
+      as.data.frame() %>% 
+      rename(values = 1)
+    
+    fins$values <- as.character(fins$values)
+    fins <- fins %>% 
+      rownames_to_column() %>% 
+      pivot_wider(names_from = rowname, 
+                  values_from = values) %>% 
+      select("to_pay" = 1, 
+             "paid" = 2, 
+             "balance" = 3) %>% 
+      mutate(case_number = casenr) %>%
+      mutate_all(~tolower(.))
+    
+    # print(c(casenr, fins$balance)) 
+    # print(Sys.time())
+    # fin_data <- bind_rows(fin_data, fins) 
+    # return(data.frame(fin_data))
+    
+    Sys.sleep(1)
+    return(data.frame(fins))
+    }
+}
+
+get_financials <- function(date_counter = 1, case_counter = 1) {
+  if(check_for_element("/html/body/table[2]/tbody/tr/td/table/tbody/tr/td[1]/font/a[7]")){
+    return(get_financials_action())
+  } else {
+    # Go to the home page and log back in
+      login_to_pinellas_courts()
+      Sys.sleep(2)
+      # Get into the All Case Search from there
+      enter_all_case_search()
+      Sys.sleep(1)
+      enter_date_range(date_counter)
+      view_case(case_counter)
+      return(get_financials_action())
+  }
+}
 
 ```
+
+#### Get address (functions)
+
+```{r}
+# Get address
+
+
+
+
+```
+
+### Get list of available documents (functions)
+
+```{r}
+# Get list of available documents
+
+
+```
+
+### Implement detailed data collection functions (financials, address, document list)
+
+```{r}
+
+# Collect financial data
+fin_data <- bind_rows(fin_data, get_financials())
+
+# Collect address data
+
+# Collect list of available documents
+
+# Bind all detailed info to all_cases_clean as all_cases_detailed
+all_cases_detailed <- all_cases_clean %>%
+  left_join(fin_data)
+
+```
+
+### Download documents
+```{r}
+
+```
+
 
 ```{r}
 return_to_results()
@@ -541,27 +665,102 @@ return_to_results()
 # Iterate over all cases on a page
 ```{r}
 # Check how many cases exist
-# Get page HTML source code (stores as list)
-pagehtml <- remote_driver$getPageSource()
-
-# Get table
-cases_df <- readHTMLTable(
-  pagehtml[[1]], # Pull the html from the list
-  which = 6) # Get the right table (the 6th one holds the info we need)
-
-# Clean up table (slightly)
-cases_df_clean <- as_tibble(cases_df) %>%
-  drop_na() %>%
-  row_to_names(1) %>%
-  mutate_if(is.factor, as.character)
-
-# Iterate over all cases
-for(i in 1:nrow(cases_df_clean)) {
-  print(i)
-  # This is where I put select_case(i)
-  # I must also change items that are FLAGed at this step
+how_many_cases <- function() {
+  # Get page HTML source code (stores as list)
+  pagehtml <- remote_driver$getPageSource()
+  
+  # Get table
+  cases_df <- readHTMLTable(
+    pagehtml[[1]], # Pull the html from the list
+    which = 6) %>% # Get the right table (the 6th one holds the info we need)
+    as_tibble() %>%
+    drop_na() %>%
+    row_to_names(1) %>%
+    mutate_if(is.factor, as.character)
+  
+  return(nrow(cases_df))
 }
 
+
+# Iterate over all cases
+# for(j in 1:how_many_cases()) {
+#   print(j)
+#   view_case(j)
+#   print(get_financials(case_counter = j,
+#                        date_counter = 1)) # need to add dynamic date_counter ="" here FLAG
+#   return_to_results()
+#   
+# }
+
+# Iterate over all date ranges
+  # Iterate over all cases in range
+
+```
+
+## Run the financial details scraper
+
+```{r}
+# Run the financial details scraper
+
+case_nrs <- all_cases_clean$`case number` %>% unique()
+
+
+# Set counter to store position in case of crash or timeout
+dates_ls_pos = 1
+
+# Iterate over all date ranges
+for(i in dates_ls_pos:length(dates_ls)) {
+  enter_date_range(i)
+  # Set (or reset) the counter for case_num
+  case_num_pos = 1
+  # Set a monthly data frame
+  fin_data<- data.frame(case_number= as.character(), 
+                          to_pay = as.character(), 
+                          paid = as.character(), 
+                          balance = as.character())
+  # Iterate over all cases in date range
+  for(j in case_num_pos:how_many_cases()) {
+  # for(j in case_num_pos:4) { # FLAG this is in testing mode
+    view_case(j)
+    # Collect financial data
+    fin_data <- bind_rows(fin_data, get_financials())
+    Sys.sleep(1)
+    print(paste0(fin_data$case_number[case_num_pos], ' from date range ', as.character(dates_ls[[1]][1]), '-', as.character(dates_ls[[1]][2])))
+    # Increment the position in the case list
+    case_num_pos <- case_num_pos + 1
+    return_to_results()
+  }
+  write.csv(fin_data, paste0('data/by-month/eviction_cases_financials_', '000', '.csv'))
+  dates_ls_pos <- dates_ls_pos + 1
+  return_to_search()
+}
+# Store the table in a CSV
+# write.csv(fin_data, 'data/eviction_cases_financials.csv')
+  
+
+# Reset the date counter
+dates_ls_pos = 1
+```
+
+```{r}
+# sanity checks
+fin_data %>% 
+  group_by(case_number) %>% 
+  count() %>% 
+  filter(n>1) %>% 
+  nrow()
+```
+## Notes
+
+* Let's simplify. Bind the case detail info to a master table only at the very end, in its own code block. In the mean time, just store each new set of data in its own csv.
+
+```{r}
+
+# Read in the stored csvs here
+
+# Bind all detailed info to all_cases_clean as all_cases_detailed
+all_cases_detailed <- all_cases_clean %>%
+  left_join(fin_data)
 ```
 
 ## Cleanup
