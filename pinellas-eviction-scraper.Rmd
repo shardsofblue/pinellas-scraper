@@ -699,6 +699,8 @@ how_many_cases <- function() {
 
 ## Run the financial details scraper
 
+*This is mid-development and non-functional. Do not deploy.*
+
 ```{r}
 # Run the financial details scraper
 
