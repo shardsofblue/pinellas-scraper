@@ -241,7 +241,7 @@ all_cases_basic_clean <- all_cases_basic %>%
 
 #### Store the combined basic data
 ```{r}
-write.csv(all_cases_basic_clean, "data/eviction_cases_basic_feb2020_june2020.csv")
+write.csv(all_cases_basic_clean, "data/eviction_cases_basic_jan2019_june2020.csv")
 ```
 
 #### Detailed info cleaning and combining
