@@ -241,7 +241,7 @@ all_cases_basic_clean <- all_cases_basic %>%
 
 #### Store the combined basic data
 ```{r}
-write.csv(all_cases_basic_clean, "data/eviction_cases_basic_feb2020_july2020.csv")
+write.csv(all_cases_basic_clean, "data/eviction_cases_basic_feb2020_june2020.csv")
 ```
 
 #### Detailed info cleaning and combining
@@ -271,8 +271,8 @@ all_cases_addresses <- list.files("data/by-month/addresses",
 
 #### Store the combined detailed data in separate csvs
 ```{r}
-write.csv(all_cases_fin, "data/eviction_cases_financials_feb2020_july2020.csv")
-write.csv(all_cases_addresses, "data/eviction_cases_addresses_feb2020_july2020.csv")
+write.csv(all_cases_fin, "data/eviction_cases_financials_feb2020_june2020.csv")
+write.csv(all_cases_addresses, "data/eviction_cases_addresses_feb2020_june2020.csv")
 
   
 ```
@@ -285,7 +285,7 @@ all_cases_detailed <- all_cases_basic_clean %>%
   left_join(all_cases_fin) %>%
   left_join(all_cases_addresses)
 
-write.csv(all_cases_detailed, "data/eviction_cases_all_feb2020_july2020.csv")
+write.csv(all_cases_detailed, "data/eviction_cases_all_feb2020_june2020.csv")
 
 ```
 
