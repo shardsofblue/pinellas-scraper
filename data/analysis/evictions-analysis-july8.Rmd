@@ -2,11 +2,22 @@
 title: "Initial Evictions Analysis"
 author: "Roxanne Ready"
 date: "7/8/2020"
-output: html_document
+always_allow_html: true
+output: 
+  github_document:
+    toc: yes
+  html_document:
+    toc: yes
+    toc_float: yes
+    code_folding: "none"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+# Setup Knitr to display code output by default but suppress messages
+knitr::opts_chunk$set(echo = TRUE, paged.print = TRUE, message = FALSE, warning = FALSE)
+
+# Save this file and run the following line from the R console to output both HTML and .md formats:
+# rmarkdown::render('data/analysis/evictions-analysis-july8.Rmd', output_format = 'all')
 ```
 
 ## Tasks
@@ -31,12 +42,14 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r libraries, results='hide', message=FALSE}
 
 library(tidyverse) # Tidy functions
+library(knitr) # For pretty tables
+library(kableExtra) # For even prettier tables
 
 ```
 
 ### Load & Prepare Data
 
-```{r data load, results='hide', message=FALSE}
+```{r data load, results='hide', message=FALSE, class.source='fold-hide'}
 
 ## ALL EVICTIONS DATA (pre-cleaned)
 
@@ -87,25 +100,29 @@ writ_data <- evictions_data %>%
 ```{r evictions 2020 totals}
 
 # Number of evictions, total (51,802)
-evictions_data %>%
+kable(evictions_data %>%
   count() %>%
-  arrange(desc(n))
+  arrange(desc(n)))
 
 # Number of evictions, by location, total
-evictions_data %>%
+kable(evictions_data %>%
   group_by(location) %>%
   count() %>%
-  arrange(desc(n))
+  arrange(desc(n))) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
 # Number of evictions, by month, total
-evictions_data %>% 
+kable(evictions_data %>% 
   group_by(file_month) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
 # Number of evictions, by month and location, total
-evictions_data %>% 
+kable(evictions_data %>% 
   group_by(location, file_month) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE)) %>%
+  scroll_box(width = "100%", height = "400px") 
   # arrange(desc(n, location))
 
 ```
@@ -127,10 +144,11 @@ evictions_data %>%
   count()
 
 # Cases missing writ file date info (21,125)
-evictions_data %>% 
+kable(evictions_data %>% 
   filter(writ_date == "no_information") %>%
   group_by(location, writ_date) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
 ## 'WRIT SERVED' INFO NA OR MISSING
 
@@ -141,10 +159,11 @@ evictions_data %>%
   count()
 
 # Cases missing writ served date info (22,896)
-evictions_data %>% 
+kable(evictions_data %>% 
   filter(writ_served_date == "no_information") %>%
   group_by(location, writ_served_date) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
 
 ```
@@ -155,48 +174,56 @@ evictions_data %>%
 ## WRIT COUNTS
 
 # Number of writs FILED, by location
-writ_data %>%
+kable(writ_data %>%
   # Filter for cases with writ filing dates
   filter(!(is.na(writ_date))&(writ_date != "no_information")) %>%
   group_by(location) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
 # Number of writs SERVED, by location
-writ_data %>%
+kable(writ_data %>%
   # Filter for cases with writ served dates
   filter(!(is.na(writ_served_date))&(writ_served_date != "no_information")) %>%
   group_by(location) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
 
 # Number of writs FILED, by month
-writ_data %>%
+kable(writ_data %>%
   # Filter for cases with writ filing dates
   filter(!(is.na(writ_date))&(writ_date != "no_information")) %>%
   group_by(writ_month) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
 # Number of writs SERVED, by month
-writ_data %>%
+kable(writ_data %>%
   # Filter for cases with writ filing dates
   filter(!(is.na(writ_served_date))&(writ_served_date != "no_information")) %>%
   group_by(writ_served_month) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
 
 # Number of writs FILED, by location and month
-writ_data %>%
+kable(writ_data %>%
   # Filter for cases with writ filing dates
   filter(!(is.na(writ_date))&(writ_date != "no_information")) %>%
   group_by(location, writ_month) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE)) %>%
+  scroll_box(width = "100%", height = "400px") 
 
 # Number of writs SERVED, by location and month
-writ_data %>%
+kable(writ_data %>%
   # Filter for cases with writ filing dates
   filter(!(is.na(writ_served_date))&(writ_served_date != "no_information")) %>%
   group_by(location, writ_served_month) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE)) %>%
+  scroll_box(width = "100%", height = "400px") 
 
 ```
 
@@ -210,27 +237,29 @@ writ_data %>%
 evictions_data %>%
   filter(file_date > "2020-03-27") %>%
   # group_by(location) %>%
-  count() %>%
-  arrange(desc(n))
+  count()
 
 # Number of evictions, by location, since Cares
-evictions_data %>%
+kable(evictions_data %>%
   filter(file_date > "2020-03-27") %>%
   group_by(location) %>%
-  count() %>%
-  arrange(desc(n))
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
 # Number of evictions, by month, since Cares
-evictions_data %>% 
+kable(evictions_data %>% 
   filter(file_date > "2020-03-27") %>%
   group_by(file_month) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
 # Number of evictions, by month and location, since Cares
-evictions_data %>% 
+kable(evictions_data %>% 
   filter(file_date > "2020-03-27") %>%
   group_by(location, file_month) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE)) %>%
+  scroll_box(width = "100%", height = "400px") 
   # arrange(desc(n, location))
 
 ```
@@ -242,71 +271,311 @@ evictions_data %>%
 ## WRIT COUNTS
 
 # Number of writs FILED, by location
-writ_data %>%
+kable(writ_data %>%
   # Filter for cases with writ filing dates
   filter(!(is.na(writ_date))&(writ_date != "no_information")) %>%
   # Filter for cases with writs filed after CARES
   filter(writ_date > "2020-03-27") %>%
   group_by(location) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
 # Number of writs SERVED, by location
-writ_data %>%
+kable(writ_data %>%
   # Filter for cases with writ served dates
   filter(!(is.na(writ_served_date))&(writ_served_date != "no_information")) %>%
   # Filter for cases with writs served after CARES
   filter(writ_served_date > "2020-03-27") %>%
   group_by(location) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
 
 # Number of writs FILED, by month
-writ_data %>%
+kable(writ_data %>%
   # Filter for cases with writ filing dates
   filter(!(is.na(writ_date))&(writ_date != "no_information")) %>%
   # Filter for cases with writs filed after CARES
   filter(writ_date > "2020-03-27") %>%
   group_by(writ_month) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
 # Number of writs SERVED, by month
-writ_data %>%
+kable(writ_data %>%
   # Filter for cases with writ filing dates
   filter(!(is.na(writ_served_date))&(writ_served_date != "no_information")) %>%
   # Filter for cases with writs served after CARES
   filter(writ_served_date > "2020-03-27") %>%
   group_by(writ_served_month) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
 
 # Number of writs FILED, by location and month
-writ_data %>%
+kable(writ_data %>%
   # Filter for cases with writ filing dates
   filter(!(is.na(writ_date))&(writ_date != "no_information")) %>%
   # Filter for cases with writs filed after CARES
   filter(writ_date > "2020-03-27") %>%
   group_by(location, writ_month) %>%
-  count()
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
 # Number of writs SERVED, by location and month
-writ_data %>%
+kable(writ_data %>%
   # Filter for cases with writ filing dates
   filter(!(is.na(writ_served_date))&(writ_served_date != "no_information")) %>%
   # Filter for cases with writs served after CARES
   filter(writ_served_date > "2020-03-27") %>%
   group_by(location, writ_served_month) %>%
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
+
+```
+
+
+### Since State-Issued Moratoria
+
+[Moratoria by State](https://docs.google.com/spreadsheets/u/1/d/e/2PACX-1vTH8dUIbfnt3X52TrY3dEHQCAm60e5nqo0Rn1rNCf15dPGeXxM9QN9UdxUfEjxwvfTKzbCbZxJMdR7X/pubhtml) as compiled by ?. "State Summaries" below are taken from here.
+
+**We have data for:**
+
+* Florida
+* Georgia
+* Louisiana
+* Montana
+* Ohio
+* Oklahoma
+* Tennessee
+* Wisconsin
+
+```{r}
+
+# See which states we have evictions data for
+evictions_data %>%
+  separate(col = location,
+           into = c("city", "state"),
+           sep = "_",
+           remove = F) %>%
+  select(-city) %>%
+  group_by(state) %>%
   count()
 
 ```
 
+#### Florida
 
-### Since State-Issued Moratoriums
+**Moratorium Bottom Line**
 
+* Began: April 2
+* Still in effect: Yes 
+* Expires: Aug. 1
+* Covers: Evictions related to COVID-19
 
+**State Summary**
+
+* On **April 2**, Governor DeSantis suspended statutes giving a cause of action for eviction *related to COVID19* and foreclosure *for 45 days*. On May 14, the order was extended to June 2 and on June 1 it was extended to July 1 and on June 30 it was *extended to August 1*. 
+* The Florida Supreme Court suspended the requirement for the clerk to issue writs of possession "forthwith" until July 2. 
+* The Governor announced a \$250 million housing assistance program, which provides \$120 million to the state housing authorities, and \$120 million to counties to assist renters.
+
+##### Eviction Filings
 
 ```{r}
 
+# View which locations within FL we have data for
+kable(evictions_data %>%
+  filter(str_detect(location, "_fl")) %>%
+  group_by(location) %>%
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
 
+# View number of evictions since moratorium
+kable(evictions_data %>%
+  # Only places in FL
+  filter(str_detect(location, "_fl")) %>%
+  # Since April 2
+  filter(file_date > "2020-04-02") %>%
+  group_by(location) %>%
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
+
+## Break it down by location
+
+# View eviction cases since hillsborough_fl's moratorium
+kable(evictions_data %>%
+  # Only places in hillsborough_fl
+  filter(location == "hillsborough_fl") %>%
+  # Since April 2
+  filter(file_date > "2020-04-02")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE)) %>%
+  scroll_box(width = "100%", height = "400px") 
+
+# View eviction cases since pinellas_fl's moratorium
+kable(evictions_data %>%
+  # Only places in pinellas_fl
+  filter(location == "pinellas_fl") %>%
+  # Since April 2
+  filter(file_date > "2020-04-02")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE)) %>%
+  scroll_box(width = "100%", height = "400px") 
+
+```
+
+##### Writs Filed and Served
+
+**Writs filed:**
+```{r}
+
+# Check whether we have any 'writs filed' data for state
+writ_data %>%
+  # Only places in FL
+  filter(str_detect(location, "_fl")) %>%
+  # Not no_information or NA
+  filter((!is.na(writ_date))&(writ_date != "no_information")) %>%
+  group_by(location) %>%
+  count()
+
+## If we do...
+
+# See how many writs have been filed since moratorium
+writ_data %>%
+  # Only places in FL
+  filter(str_detect(location, "_fl")) %>%
+  # Not no_information or NA
+  filter((!is.na(writ_date))&(writ_date != "no_information")) %>%
+  # Since April 2
+  filter(writ_date > "2020-04-02") %>%
+  group_by(location) %>%
+  count()
+
+# See which writs have been filed since moratorium
+kable(writ_data %>%
+  # Only places in FL
+  filter(str_detect(location, "_fl")) %>%
+  # Not no_information or NA
+  filter((!is.na(writ_date))&(writ_date != "no_information")) %>%
+  # Since April 2
+  filter(writ_date > "2020-04-02")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE)) %>%
+  scroll_box(width = "100%", height = "400px") 
+
+```
+
+**Writs served:**
+```{r}
+
+# Check whether we have any 'writs served' data for state
+writ_data %>%
+  # Only places in FL
+  filter(str_detect(location, "_fl")) %>%
+  # Not no_information or NA
+  filter((!is.na(writ_served_date))&(writ_served_date != "no_information")) %>%
+  group_by(location) %>%
+  count()
+
+## If we do...
+
+# See how many writs have been served since moratorium
+writ_data %>%
+  # Only places in FL
+  filter(str_detect(location, "_fl")) %>%
+  # Not no_information or NA
+  filter((!is.na(writ_served_date))&(writ_served_date != "no_information")) %>%
+  # Since April 2
+  filter(writ_date > "2020-04-02") %>%
+  group_by(location) %>%
+  count()
+
+# See which writs have been served since moratorium
+kable(writ_data %>%
+  # Only places in FL
+  filter(str_detect(location, "_fl")) %>%
+  # Not no_information or NA
+  filter((!is.na(writ_served_date))&(writ_served_date != "no_information")) %>%
+  # Since April 2
+  filter(writ_date > "2020-04-02")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
+
+```
+
+#### Georgia
+
+**Moratorium Bottom Line**
+
+* Began: March 14 (varies)
+* Still in effect: No
+* Expires: April 13 (varies)
+* Covers: Only applies directly to eviction cases in certain jurisdictions
+
+**State Summary**
+
+* Georgia's Supreme Court has issued guidance that courts are to prioritize essential functions from March 14, 2020 to April 13th, 2020 and conduct video proceedings wherever possible. 
+* Each circuit, municipal and magistrate court had a slightly different version and date range for adopting this ruling.
+
+##### Eviction Filings
+
+```{r}
+
+# View which locations within state we have data for
+kable(evictions_data %>%
+  filter(str_detect(location, "_ga")) %>%
+  group_by(location) %>%
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
+
+# View number of evictions since moratorium
+kable(evictions_data %>%
+  # Only places in FL
+  filter(str_detect(location, "_ga")) %>%
+  # Since April 2
+  filter(file_date > "2020-03-14") %>%
+  group_by(location) %>%
+  count()) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", full_width = FALSE))
+
+## Break it down by location
+
+# Chatham
+# evictions_data %>%
+#   # Only places in chatham_ga
+#   filter(location == "chatham_ga") %>%
+#   # Since DATE RELEVANT TO CHATHAM
+#   filter(file_date > "??")
+
+```
+
+##### Writs Filed and Served
+
+**Writs filed:**
+```{r}
+
+# Check whether we have any 'writs filed' data for state
+writ_data %>%
+  # Only places in FL
+  filter(str_detect(location, "_ga")) %>%
+  # Not no_information or NA
+  filter((!is.na(writ_date))&(writ_date != "no_information")) %>%
+  group_by(location) %>%
+  count()
+
+## If we do...
+
+# See how many writs have been filed since moratorium
+
+# See which writs have been filed since moratorium
+
+```
+**Writs served:**
+```{r}
+
+# Check whether we have any 'writ served' data for state
+
+## If we do...
+
+# See how many writs have been served since moratorium
+
+# See which writs have been served since moratorium
 
 ```
 
@@ -314,3 +583,61 @@ writ_data %>%
 
 
 
+### TEMPLATE for state-by-state
+
+#### [Replace with state name]
+
+**Moratorium Bottom Line**
+
+* Began: 
+* Still in effect:  
+* Expires: 
+* Covers: 
+
+**State Summary**
+
+Replace with summary text from [Moratoria by State](https://docs.google.com/spreadsheets/u/1/d/e/2PACX-1vTH8dUIbfnt3X52TrY3dEHQCAm60e5nqo0Rn1rNCf15dPGeXxM9QN9UdxUfEjxwvfTKzbCbZxJMdR7X/pubhtml)
+
+##### Eviction Filings
+
+```{r}
+
+# View which locations within state we have data for
+
+# View TOTAL number of evictions since moratorium by location
+
+## Break it down by location
+
+# View eviction cases since [location1]'s moratorium
+# View eviction cases since [location2]'s moratorium
+# etc.
+
+```
+
+##### Writs Filed and Served
+
+**Writs filed:** 
+```{r}
+
+# Check whether we have any 'writs filed' data for state
+
+## If we do...
+
+# See how many writs have been filed since moratorium
+
+# See which writs have been filed since moratorium
+
+```
+
+**Writs served:**
+```{r}
+
+# Check whether we have any 'writs served' data for state
+
+## If we do...
+
+# See how many writs have been served since moratorium
+
+# See which writs have been served since moratorium
+
+```
