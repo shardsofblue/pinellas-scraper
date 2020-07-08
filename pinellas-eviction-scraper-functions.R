@@ -79,14 +79,6 @@ check_for_element <- function(element_to_check, by = "xpath") {
   }
 }
 
-### Send to webpage ####
-
-# Function to navigate to the Pinellas court system homepage
-navigate_to_pinellas_courts_home <- function() {
-  myurl <- remote_driver$navigate(
-  "https://ccmspa.pinellascounty.org/PublicAccess/default.aspx")
-}
-
 #### Check what page ####
 
 # Function to check if at login screen
@@ -106,6 +98,14 @@ check_if_case_details_page <- function() {
   }
 }
 
+### Send to webpage ####
+
+# Function to navigate to the Pinellas court system homepage
+navigate_to_pinellas_courts_home <- function() {
+  myurl <- remote_driver$navigate(
+    "https://ccmspa.pinellascounty.org/PublicAccess/default.aspx")
+}
+
 #### Get case number ####
 # Function to get case number if on case details page
 get_case_num <- function(){
@@ -114,7 +114,10 @@ get_case_num <- function(){
                                        value="ssCaseDetailCaseNbr")
     return(as.character(temp[[1]]$getElementText())) %>%
       str_remove_all("(Case\\sNo\\.\\s)")
-  } else { print("get_case_num: Couldn't find case number")}
+  } else { 
+    print("get_case_num: Couldn't find case number")
+    return("NA")
+    }
 }
 
 ### Log in functions ####
@@ -144,6 +147,7 @@ login_action <- function() {
   temp <- remote_driver$findElement(using = "xpath",
                                     value = "/html/body/form/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table/tbody/tr[6]/td/input")
   temp$clickElement()
+  Sys.sleep(3)
 }
 
 login_to_pinellas_courts <- function() {
@@ -311,9 +315,7 @@ store_basic_info <- function(x) {
     return(store_basic_info_action(x))
     } else {
       print("store_basic_info: Element not found; returning to start.")
-      # Go to the home page and log back in
-      login_to_pinellas_courts()
-      Sys.sleep(2)
+      # Go back a step (this function will regress back to the start if necessary)
       enter_all_case_search()
       Sys.sleep(1)
       # Look for All Case Records Search link
@@ -334,10 +336,7 @@ return_to_search <- function() {
     temp$clickElement()
     Sys.sleep(1)
   } else {
-    # Go to the home page and log back in
-    login_to_pinellas_courts()
-    Sys.sleep(2)
-    # Get into the All Case Search from there
+    # Go back a step (this function will regress back to the start if necessary)
     enter_all_case_search()
     Sys.sleep(1)
   }
@@ -362,23 +361,13 @@ view_case <- function(x_case_pos, y_date_pos){
     print("view_case: Element found; able to enter an individual case record.")
     view_case_action(x_case_pos)
     if(check_if_login_screen() == TRUE){
-      # Go to the home page and log back in
-      login_to_pinellas_courts()
-      Sys.sleep(2)
-      # Get into the All Case Search from there
-      enter_all_case_search()
-      Sys.sleep(1)
+      # Go back a step (this function will regress back to the start if necessary)
       enter_date_range(y_date_pos) 
       view_case_action(x_case_pos)
     }
   } else {
     print("view_case: Element not found; returning to start.")
-    # Go to the home page and log back in
-    login_to_pinellas_courts()
-    Sys.sleep(2)
-    # Get into the All Case Search from there
-    enter_all_case_search()
-    Sys.sleep(1)
+    # Go back a step (this function will regress back to the start if necessary)
     enter_date_range(y_date_pos) 
     if(check_for_element(paste0("/html/body/table[4]/tbody/tr[", x_case_pos+2, "]/td[1]/a"))) {
       view_case_action(x_case_pos)
@@ -406,12 +395,7 @@ return_to_results <- function(x_date_pos){
     return_to_results_action()
   } else {
     print("return_to_results: Element not found; returning to start.")
-    # Go to the home page and log back in
-    login_to_pinellas_courts()
-    Sys.sleep(2)
-    # Get into the All Case Search from there
-    enter_all_case_search()
-    Sys.sleep(1)
+    # Go back a step (this function will regress back to the start if necessary)
     enter_date_range(x_date_pos)
   }
 }
@@ -439,12 +423,11 @@ get_financials_action <- function(){
   pagesource <- remote_driver$getPageSource()
   mynodes <- read_html(pagesource[[1]])
   
+  # Get case number
+  casenr <- tolower(get_case_num())
+  
   if (str_detect(pagesource, "Financial Information") == TRUE) {
     print("get_financials_action: Element found; financial data present.")
-    temp <- remote_driver$findElements(using="class name",
-                                       value="ssCaseDetailCaseNbr")
-    casenr <- as.character(temp[[1]]$getElementText()) %>%
-      str_remove_all("(Case\\sNo\\.\\s)")
     
     #get financial information 
     fins <- mynodes %>% 
@@ -473,23 +456,22 @@ get_financials_action <- function(){
     return(data.frame(fins))
   } else {
     print("get_financials_action: Element not found; no financial data present.")
+    fins <- data.frame(case_number = casenr,
+                       to_pay = "",
+                       paid = "",
+                       balance = "")
+    return(data.frame(fins))
   }
 }
 
 # Function to implement getting financials
-get_financials <- function(date_counter = 1, case_counter = 1) {
+get_financials <- function(date_counter, case_counter) {
   if(check_for_element("/html/body/table[2]/tbody/tr/td/table/tbody/tr/td[1]/font/a[7]")){
     print("get_financials: Element found; I'm viewing a single case.")
     return(get_financials_action())
   } else {
     print("get_financials: Element not found; returning to login.")
-    # Go to the home page and log back in
-    login_to_pinellas_courts()
-    Sys.sleep(2)
-    # Get into the All Case Search from there
-    enter_all_case_search()
-    Sys.sleep(1)
-    enter_date_range(date_counter)
+    # Go back a step (this function will regress back to the start if necessary)
     view_case(case_counter, date_counter)
     return(get_financials_action())
   }
@@ -507,6 +489,9 @@ get_addresses_action <- function() {
   pagehtml <- remote_driver$getPageSource()
   mynodes <- read_html(pagehtml[[1]])
   
+  # Get case number
+  case_num_this <- tolower(get_case_num())
+  
   # Check for "Party Information" at expected location on page
   if(check_for_text("Party Information", "/html/body/table[4]/caption/div")){
     print("get_addresses_action: Element found; retrieving party information.")
@@ -516,12 +501,6 @@ get_addresses_action <- function() {
     # This is the table we want
     temp <- remote_driver$findElements(using = "xpath",
                                        value = "/html/body/table[4]")
-    
-    #### Working code
-    
-    # Get case number
-    case_num_this <- tolower(get_case_num())
-    
     # Get defendant address
     if(check_for_element("//*[contains(text(), 'DEFENDANT')]/ancestor::tr/following-sibling::tr")) {
       print("get_addresses_action: Defendant address found.")
@@ -562,25 +541,22 @@ get_addresses_action <- function() {
   
   } else {
     print("get_addresses_action: No Party Information data found for this case.")
+    address_data_this <- address_data_this %>% add_row(case_number = case_num_this, 
+                                                       def_address = "",
+                                                       plaint_address = "")
   } 
   return(address_data_this)
 }
 
 # Get addresses
-get_addresses <- function(date_counter = 1, case_counter = 1) {
+get_addresses <- function(date_counter, case_counter) {
   # Check that it's viewing a single case
   if(check_if_case_details_page()){
     print("get_addresses: Element found; I'm viewing a single case.")
     return(get_addresses_action())
   } else {
     print("get_addresses: Element not found; returning to login.")
-    # Go to the home page and log back in
-    login_to_pinellas_courts()
-    Sys.sleep(2)
-    # Get into the All Case Search from there
-    enter_all_case_search()
-    Sys.sleep(1)
-    enter_date_range(date_counter)
+    # Go back a step (this function will regress back to the start if necessary)
     view_case(case_counter, date_counter)
     # Check again that it's viewing a single case. If not, note the error and move on.
     if(check_if_case_details_page()){
@@ -588,6 +564,7 @@ get_addresses <- function(date_counter = 1, case_counter = 1) {
       return(get_addresses_action())
     } else {
       print("get_addresses: Case details page not found.")
+      return(get_addresses_action())
     }
   }
 }

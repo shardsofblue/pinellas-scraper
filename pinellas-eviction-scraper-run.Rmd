@@ -50,14 +50,14 @@ remote_driver <- rD1[["client"]]
 ```{r}
 # Store series of date ranges in one-month intervals 
 dates_ls <- list(
-                 list("06/01/2020", "06/30/2020"), # 2020
-                 list("05/01/2020", "05/31/2020"),
-                 list("04/01/2020", "04/30/2020"),
-                 list("03/01/2020", "03/31/2020"),
-                 list("02/01/2020", "02/29/2020"),
-                 list("01/01/2020", "01/31/2020"),
-                 list("12/01/2019", "12/31/2019"), # 2019
-                 list("11/01/2019", "11/30/2019"),
+                 # list("06/01/2020", "06/30/2020"), # 2020
+                 # list("05/01/2020", "05/31/2020"),
+                 # list("04/01/2020", "04/30/2020"),
+                 # list("03/01/2020", "03/31/2020"),
+                 # list("02/01/2020", "02/29/2020"),
+                 # list("01/01/2020", "01/31/2020"),
+                 # list("12/01/2019", "12/31/2019"), # 2019
+                 # list("11/01/2019", "11/30/2019"),
                  list("10/01/2019", "10/31/2019"),
                  list("09/01/2019", "09/30/2019"),
                  list("08/01/2019", "08/31/2019"),
@@ -156,11 +156,11 @@ for(i in dates_ls_pos:length(dates_ls)) {
     
     #### DATA COLLECTION: CASE DETAILS ####
     # Collect FINANCIAL data
-    fin_data <- bind_rows(fin_data, get_financials())
+    fin_data <- bind_rows(fin_data, get_financials(dates_ls_pos, case_num_pos))
     print(paste0('Financial data retrieved from ', fin_data$case_number[case_num_pos], ' in month ', dates_filename))
     
     # Collect ADDRESS data
-    address_data <- bind_rows(address_data, get_addresses())
+    address_data <- bind_rows(address_data, get_addresses(dates_ls_pos, case_num_pos))
     print(paste0('Address data retrieved from ', address_data$case_number[case_num_pos], ' in month ', dates_filename))
     
     # Increment the position in the case list
@@ -271,8 +271,8 @@ all_cases_addresses <- list.files("data/by-month/addresses",
 
 #### Store the combined detailed data in separate csvs
 ```{r}
-write.csv(all_cases_fin, "data/eviction_cases_financials_feb2020_june2020.csv")
-write.csv(all_cases_addresses, "data/eviction_cases_addresses_feb2020_june2020.csv")
+write.csv(all_cases_fin, "data/eviction_cases_financials_january2019_june2020.csv")
+write.csv(all_cases_addresses, "data/eviction_cases_addresses_january2019_june2020.csv")
 
   
 ```
@@ -297,6 +297,7 @@ write.csv(all_cases_detailed, "data/eviction_cases_all_feb2020_june2020.csv")
 # sanity checks
 fin_data %>% 
   group_by(case_number) %>% 
+  filter(case_number == "")
   count() %>% 
   filter(n>1) %>% 
   nrow()
