@@ -285,7 +285,7 @@ all_cases_detailed <- all_cases_basic_clean %>%
   left_join(all_cases_fin) %>%
   left_join(all_cases_addresses)
 
-write.csv(all_cases_detailed, "data/eviction_cases_all_feb2020_june2020.csv")
+write.csv(all_cases_detailed, "data/eviction_cases_all_january2019_june2020.csv")
 
 ```
 
@@ -293,17 +293,20 @@ write.csv(all_cases_detailed, "data/eviction_cases_all_feb2020_june2020.csv")
 
 ### Sanity checks 
 
+plaint_address == NA : 160
+def_address == NA : 192
+to_pay == NA : 92
+case_number duplicates in address pull : 3
+
 ```{r}
 # sanity checks
-fin_data %>% 
+all_cases_detailed %>% 
   group_by(case_number) %>% 
-  filter(case_number == "")
-  count() %>% 
-  filter(n>1) %>% 
-  nrow()
+  filter(is.na(case_number)) %>%
+  count()
 
 t <- read_csv("data/eviction_cases_financials_DATERANGE.csv")
-t %>% group_by(case_number) %>%
+all_cases_addresses %>% group_by(case_number) %>%
   count() %>%
   filter(n>1) %>%
   nrow()
