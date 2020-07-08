@@ -28,6 +28,16 @@ library(reticulate) # For injecting Python
 source("pinellas-eviction-scraper-functions.R")
 ```
 
+### Set path variables
+
+```{r results='hide', message=FALSE}
+
+path_to_data <- "data"
+path_to_monthly <- "data/misc/by-month"
+path_to_large_files <- "data/misc/large-files"
+
+```
+
 ### Set up headless browser
 
 ```{r results='hide', message=FALSE}
@@ -97,7 +107,7 @@ for(i in dates_ls_pos:length(dates_ls)) {
   # store the basic data
   cases_df_clean <- store_basic_info(dates_ls_pos)
   # write the basic data to a file
-  write.csv(cases_df_clean, paste0('data/by-month/basic-info/eviction_cases_', dates_filename, '.csv'))
+  write.csv(cases_df_clean, paste0(path_to_monthly, '/basic-info/eviction_cases_', dates_filename, '.csv'))
   # return to the search page
   return_to_search()
   # increment the counter
@@ -146,7 +156,7 @@ for(i in dates_ls_pos:length(dates_ls)) {
   
   ##### DATA COLLECTION: BASIC CASE INFO ####
   cases_df_clean <- store_basic_info(dates_ls_pos)
-  write.csv(cases_df_clean, paste0('data/by-month/basic-info/eviction_cases_', dates_filename, '.csv'))
+  write.csv(cases_df_clean, paste0(path_to_monthly, '/basic-info/eviction_cases_', dates_filename, '.csv'))
   
   # Iterate over all cases within the date range
   for(j in case_num_pos:num_cases) {
@@ -179,10 +189,10 @@ for(i in dates_ls_pos:length(dates_ls)) {
   }
   
   # Store FINANCIALS data
-  write.csv(fin_data, paste0('data/by-month/financials/eviction_cases_', dates_filename, '.csv'))
+  write.csv(fin_data, paste0(path_to_monthly, '/financials/eviction_cases_', dates_filename, '.csv'))
   
   # Store ADDRESS data
-  write.csv(address_data, paste0('data/by-month/addresses/eviction_cases_', dates_filename, '.csv'))
+  write.csv(address_data, paste0(path_to_monthly, '/addresses/eviction_cases_', dates_filename, '.csv'))
   
   # Increment the dates position counter
   dates_ls_pos <- dates_ls_pos + 1
@@ -205,7 +215,7 @@ sink.reset()
 ```{r results='hide', message=FALSE}
 
 # Read in all CSVs
-all_cases_basic <- list.files("data/by-month/basic-info", 
+all_cases_basic <- list.files(path_to_monthly, "/basic-info", 
            "*.csv",
            full.names=TRUE) %>%
   map_dfr(read_csv) %>%
@@ -251,7 +261,7 @@ write.csv(all_cases_basic_clean, "data/eviction_cases_basic_jan2019_june2020.csv
 # Read in all CSVs
 
 ## Financials
-all_cases_fin <- list.files("data/by-month/financials", 
+all_cases_fin <- list.files(path_to_monthly, "/financials", 
            "*.csv",
            full.names=TRUE) %>%
   map_dfr(read_csv) %>%
@@ -259,7 +269,7 @@ all_cases_fin <- list.files("data/by-month/financials",
   mutate_all(~trimws(., "both"))
 
 ## Addresses
-all_cases_addresses <- list.files("data/by-month/addresses", 
+all_cases_addresses <- list.files(path_to_monthly, "/addresses", 
            "*.csv",
            full.names=TRUE) %>%
   map_dfr(read_csv) %>%
@@ -271,8 +281,8 @@ all_cases_addresses <- list.files("data/by-month/addresses",
 
 #### Store the combined detailed data in separate csvs
 ```{r}
-write.csv(all_cases_fin, "data/eviction_cases_financials_january2019_june2020.csv")
-write.csv(all_cases_addresses, "data/eviction_cases_addresses_january2019_june2020.csv")
+write.csv(all_cases_fin, path_to_data, "/eviction_cases_financials_january2019_june2020.csv")
+write.csv(all_cases_addresses, path_to_data, "/eviction_cases_addresses_january2019_june2020.csv")
 
   
 ```
@@ -285,7 +295,7 @@ all_cases_detailed <- all_cases_basic_clean %>%
   left_join(all_cases_fin) %>%
   left_join(all_cases_addresses)
 
-write.csv(all_cases_detailed, "data/eviction_cases_all_january2019_june2020.csv")
+write.csv(all_cases_detailed, path_to_data, "/eviction_cases_all_january2019_june2020.csv")
 
 ```
 
@@ -305,15 +315,15 @@ all_cases_detailed %>%
   filter(is.na(case_number)) %>%
   count()
 
-t <- read_csv("data/eviction_cases_financials_DATERANGE.csv")
+t <- read_csv(path_to_data, "/eviction_cases_financials_DATERANGE.csv")
 all_cases_addresses %>% group_by(case_number) %>%
   count() %>%
   filter(n>1) %>%
   nrow()
 
-t <- read_csv("data/eviction_cases_financials_DATERANGE.csv") %>%
+t <- read_csv(path_to_data, "/eviction_cases_financials_DATERANGE.csv") %>%
   select(-"X1") %>%
-  full_join(read_csv("data/eviction_cases_addresses_DATERANGE.csv"), by= c("case_number" = "case_num")) %>%
+  full_join(read_csv(path_to_data, "/eviction_cases_addresses_DATERANGE.csv"), by= c("case_number" = "case_num")) %>%
   select(-"X1")
 t %>% filter(is.na(def_address))
 
