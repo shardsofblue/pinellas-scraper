@@ -1,0 +1,316 @@
+---
+title: "Initial Evictions Analysis"
+author: "Roxanne Ready"
+date: "7/8/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Tasks
+
+* All of 2020, by month, number of...
+  * √ eviction filings
+  * √ writs issued
+  * √ writs executed
+* Since CARES Act moratorium on March 27, number of...
+  * √ eviction filings
+  * √ writs issued
+  * √ writs executed
+* Since state moratoriums, number of...
+  * eviction filings
+  * writs issued
+  * writs executed
+
+## Setup
+
+### Load Libraries
+
+```{r libraries, results='hide', message=FALSE}
+
+library(tidyverse) # Tidy functions
+
+```
+
+### Load & Prepare Data
+
+```{r data load, results='hide', message=FALSE}
+
+## ALL EVICTIONS DATA (pre-cleaned)
+
+# Import data
+evictions_data_raw <- read_csv("sta_evictions_all_2020.csv")
+
+# Filter out all Wisconsin except Milwaukee
+evictions_data <- evictions_data_raw %>%
+  # Remove all Wisconsin
+  filter(!str_detect(location, "_wi")) %>%
+  # Re-add Milwaukee
+  bind_rows(evictions_data_raw %>%
+              filter(location == "milwaukee_wi"))
+
+# Remove redundant data frame
+rm(evictions_data_raw)
+
+
+## PREPARE WRIT DATA
+
+# Split filing dates for grouping by month, and store
+writ_data <- evictions_data %>%
+  # Split out writ filing dates
+  separate(col = writ_date,
+           into = c("writ_year", "writ_month", "writ_day"),
+           sep = "-",
+           remove = F
+  ) %>%
+  # Split out writ served dates
+  separate(col = writ_served_date,
+           into = c("writ_served_year", "writ_served_month", "writ_served_day"),
+           sep = "-",
+           remove = F
+  ) %>%
+  # Keep only relevant writ info (can be rejoined with other table if more info needed)
+  select(location, case_number, file_date, 
+         writ_date, writ_month, writ_day, writ_year, 
+         writ_served_date, writ_served_month, writ_served_day, writ_served_year)
+
+```
+
+## Analysis
+
+### All of 2020
+
+#### Evictions
+
+```{r evictions 2020 totals}
+
+# Number of evictions, total (51,802)
+evictions_data %>%
+  count() %>%
+  arrange(desc(n))
+
+# Number of evictions, by location, total
+evictions_data %>%
+  group_by(location) %>%
+  count() %>%
+  arrange(desc(n))
+
+# Number of evictions, by month, total
+evictions_data %>% 
+  group_by(file_month) %>%
+  count()
+
+# Number of evictions, by month and location, total
+evictions_data %>% 
+  group_by(location, file_month) %>%
+  count()
+  # arrange(desc(n, location))
+
+```
+
+#### Writs Filed and Served
+
+Notes: 
+
+* If `writ_date` / `writ_served_date` says "no_information," there was NO data in the county (count unknown). If it's NA, it means that in that county, we do have that data BUT there wasn't one for that case (count zero).
+
+```{r writs 2020 NA or missing}
+
+### 'WRIT FILED' INFO NA OR MISSING
+
+# Cases with no writ filed date attached (26,057)
+evictions_data %>%
+  filter(is.na(writ_date)) %>%
+  group_by(writ_date) %>%
+  count()
+
+# Cases missing writ file date info (21,125)
+evictions_data %>% 
+  filter(writ_date == "no_information") %>%
+  group_by(location, writ_date) %>%
+  count()
+
+## 'WRIT SERVED' INFO NA OR MISSING
+
+# Cases with no writ served date attached (25,324)
+evictions_data %>% 
+  filter(is.na(writ_served_date)) %>%
+  group_by(writ_served_date) %>%
+  count()
+
+# Cases missing writ served date info (22,896)
+evictions_data %>% 
+  filter(writ_served_date == "no_information") %>%
+  group_by(location, writ_served_date) %>%
+  count()
+
+
+```
+
+
+```{r writs 2020 breakdowns}
+
+## WRIT COUNTS
+
+# Number of writs FILED, by location
+writ_data %>%
+  # Filter for cases with writ filing dates
+  filter(!(is.na(writ_date))&(writ_date != "no_information")) %>%
+  group_by(location) %>%
+  count()
+
+# Number of writs SERVED, by location
+writ_data %>%
+  # Filter for cases with writ served dates
+  filter(!(is.na(writ_served_date))&(writ_served_date != "no_information")) %>%
+  group_by(location) %>%
+  count()
+
+
+# Number of writs FILED, by month
+writ_data %>%
+  # Filter for cases with writ filing dates
+  filter(!(is.na(writ_date))&(writ_date != "no_information")) %>%
+  group_by(writ_month) %>%
+  count()
+
+# Number of writs SERVED, by month
+writ_data %>%
+  # Filter for cases with writ filing dates
+  filter(!(is.na(writ_served_date))&(writ_served_date != "no_information")) %>%
+  group_by(writ_served_month) %>%
+  count()
+
+
+# Number of writs FILED, by location and month
+writ_data %>%
+  # Filter for cases with writ filing dates
+  filter(!(is.na(writ_date))&(writ_date != "no_information")) %>%
+  group_by(location, writ_month) %>%
+  count()
+
+# Number of writs SERVED, by location and month
+writ_data %>%
+  # Filter for cases with writ filing dates
+  filter(!(is.na(writ_served_date))&(writ_served_date != "no_information")) %>%
+  group_by(location, writ_served_month) %>%
+  count()
+
+```
+
+### Since CARES Act (March 27)
+
+#### Evictions
+
+```{r evictions since CARES totals}
+
+# Number of evictions, since Cares (9,672)
+evictions_data %>%
+  filter(file_date > "2020-03-27") %>%
+  # group_by(location) %>%
+  count() %>%
+  arrange(desc(n))
+
+# Number of evictions, by location, since Cares
+evictions_data %>%
+  filter(file_date > "2020-03-27") %>%
+  group_by(location) %>%
+  count() %>%
+  arrange(desc(n))
+
+# Number of evictions, by month, since Cares
+evictions_data %>% 
+  filter(file_date > "2020-03-27") %>%
+  group_by(file_month) %>%
+  count()
+
+# Number of evictions, by month and location, since Cares
+evictions_data %>% 
+  filter(file_date > "2020-03-27") %>%
+  group_by(location, file_month) %>%
+  count()
+  # arrange(desc(n, location))
+
+```
+
+#### Writs Filed and Served
+
+```{r writs CARES breakdowns}
+
+## WRIT COUNTS
+
+# Number of writs FILED, by location
+writ_data %>%
+  # Filter for cases with writ filing dates
+  filter(!(is.na(writ_date))&(writ_date != "no_information")) %>%
+  # Filter for cases with writs filed after CARES
+  filter(writ_date > "2020-03-27") %>%
+  group_by(location) %>%
+  count()
+
+# Number of writs SERVED, by location
+writ_data %>%
+  # Filter for cases with writ served dates
+  filter(!(is.na(writ_served_date))&(writ_served_date != "no_information")) %>%
+  # Filter for cases with writs served after CARES
+  filter(writ_served_date > "2020-03-27") %>%
+  group_by(location) %>%
+  count()
+
+
+# Number of writs FILED, by month
+writ_data %>%
+  # Filter for cases with writ filing dates
+  filter(!(is.na(writ_date))&(writ_date != "no_information")) %>%
+  # Filter for cases with writs filed after CARES
+  filter(writ_date > "2020-03-27") %>%
+  group_by(writ_month) %>%
+  count()
+
+# Number of writs SERVED, by month
+writ_data %>%
+  # Filter for cases with writ filing dates
+  filter(!(is.na(writ_served_date))&(writ_served_date != "no_information")) %>%
+  # Filter for cases with writs served after CARES
+  filter(writ_served_date > "2020-03-27") %>%
+  group_by(writ_served_month) %>%
+  count()
+
+
+# Number of writs FILED, by location and month
+writ_data %>%
+  # Filter for cases with writ filing dates
+  filter(!(is.na(writ_date))&(writ_date != "no_information")) %>%
+  # Filter for cases with writs filed after CARES
+  filter(writ_date > "2020-03-27") %>%
+  group_by(location, writ_month) %>%
+  count()
+
+# Number of writs SERVED, by location and month
+writ_data %>%
+  # Filter for cases with writ filing dates
+  filter(!(is.na(writ_served_date))&(writ_served_date != "no_information")) %>%
+  # Filter for cases with writs served after CARES
+  filter(writ_served_date > "2020-03-27") %>%
+  group_by(location, writ_served_month) %>%
+  count()
+
+```
+
+
+### Since State-Issued Moratoriums
+
+
+
+```{r}
+
+
+
+```
+
+
+
+
+
