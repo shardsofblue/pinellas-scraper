@@ -68,14 +68,8 @@ Temporary Items
 .vim
 .DS_Store
 
-data/*
-!data/.gitkeep
-
-R/data/*
-!R/data/.gitkeep
-
-python/downloads/*
-!python/downloads/.gitkeep
+data/large-files/*
+!data/large-files/.gitkeep
 
 scratch/*
 !scratch/.gitkeep

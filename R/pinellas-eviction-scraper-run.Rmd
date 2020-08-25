@@ -1,0 +1,346 @@
+---
+title: "pinellas-eviciton-scraper-run"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+### Load Libraries
+
+```{r results='hide', message=FALSE}
+library(tidyverse) # Tidy functions
+library(RSelenium) # Headless browser
+library(XML) # For extracting info from HTML
+library(seleniumPipes) # For additional Selenium features
+library(rvest) # For extracting info from HTML
+library(RCurl) # For extracting URL
+library(janitor) # For cleaning up scraped data
+library(reticulate) # For injecting Python
+```
+
+### Include scraper functions
+
+```{r}
+source("pinellas-eviction-scraper-functions.R")
+```
+
+### Set path variables
+
+```{r results='hide', message=FALSE}
+
+path_to_data_root <- "data"
+path_to_monthly <- "data/misc/by-month"
+
+```
+
+### Store date ranges to scrape
+
+```{r}
+# Store series of date ranges in one-month intervals 
+dates_ls <- list(
+                 list("07/01/2020", "07/31/2020") # 2020
+                 # list("06/01/2020", "06/30/2020"),
+                 # list("05/01/2020", "05/31/2020"),
+                 # list("04/01/2020", "04/30/2020"),
+                 # list("03/01/2020", "03/31/2020"),
+                 # list("02/01/2020", "02/29/2020"),
+                 # list("01/01/2020", "01/31/2020"),
+                 # list("12/01/2019", "12/31/2019"), # 2019
+                 # list("11/01/2019", "11/30/2019"),
+                 # list("10/01/2019", "10/31/2019"),
+                 # list("09/01/2019", "09/30/2019"),
+                 # list("08/01/2019", "08/31/2019"),
+                 # list("07/01/2019", "07/31/2019"),
+                 # list("06/01/2019", "06/30/2019"),
+                 # list("05/01/2019", "05/31/2019"),
+                 # list("04/01/2019", "04/30/2019"),
+                 # list("03/01/2019", "03/31/2019"),
+                 # list("02/01/2019", "02/28/2019"),
+                 # list("01/01/2019", "01/31/2019")
+                 )
+```
+
+## Scraper deployment
+
+### Set up headless browser
+
+```{r results='hide', message=FALSE}
+## Activate Headless Driver
+# Create and initialize driver
+rD1 <- rsDriver(browser = c("chrome"),
+                port = 4960L,
+                # To find Chrome ver. num., use binman::list_versions("chromedriver"); try multiple
+                chromever = "83.0.4103.39")
+
+# rD2 <- rsDriver(browser = c("firefox"))
+
+remote_driver <- rD1[["client"]]
+# remote_driver <- rD2[["client"]]
+
+```
+
+### Navigate to website & log in
+
+```{r}
+navigate_to_pinellas_courts_home()
+login_to_pinellas_courts()
+enter_all_case_search()
+```
+
+### Scrape only the basic case info over a given date range
+
+```{r}
+# Set counter to store position in case of crash or timeout
+dates_ls_pos = 1
+
+# Run the scraper
+for(i in dates_ls_pos:length(dates_ls)) {
+  # Get month-year for filename
+  dates_filename <- as.character(dates_ls[[dates_ls_pos]][1]) %>%
+      str_replace_all('(/\\d\\d/)', '-')
+  # enter a range of dates
+  enter_date_range(dates_ls_pos)
+  # store the basic data
+  cases_df_clean <- store_basic_info(dates_ls_pos)
+  # write the basic data to a file
+  write.csv(cases_df_clean, paste0(path_to_monthly, '/basic-info/eviction_cases_', dates_filename, '.csv'))
+  # return to the search page
+  return_to_search()
+  # increment the counter
+  dates_ls_pos <- dates_ls_pos + 1
+}
+
+# Reset the counter
+dates_ls_pos = 1
+
+```
+
+### Scrape details of each case over a given date range
+
+```{r}
+# Run the details scraper
+
+sink(file = "data/log.txt", type = "output") # Debugging
+
+# Set counter to store position in case of crash or timeout
+dates_ls_pos = 1
+
+# Iterate over all date ranges
+for(i in dates_ls_pos:length(dates_ls)) {
+  enter_date_range(dates_ls_pos)
+  # Set (or reset) the counter for case_num
+  case_num_pos = 1
+  
+  #### DATA PREPARATION ####
+  # Set a monthly FINANCIAL data frame
+  fin_data<- data.frame(case_number= as.character(), 
+                          to_pay = as.character(), 
+                          paid = as.character(), 
+                          balance = as.character())
+  
+  # Set a monthly ADDRESS data frame
+  address_data<- data.frame(case_number = as.character(),
+                            def_address = as.character(),
+                            plaint_address = as.character())
+  
+  # Count cases on page
+  num_cases <- how_many_cases()
+  
+  # Get month / year for filename
+  dates_filename <- as.character(dates_ls[[dates_ls_pos]][1]) %>%
+      str_replace_all('(/\\d\\d/)', '-')
+  
+  ##### DATA COLLECTION: BASIC CASE INFO ####
+  cases_df_clean <- store_basic_info(dates_ls_pos)
+  write.csv(cases_df_clean, paste0(path_to_monthly, '/basic-info/eviction_cases_', dates_filename, '.csv'))
+  
+  # Iterate over all cases within the date range
+  for(j in case_num_pos:num_cases) {
+  # for(j in case_num_pos:4) { # FLAG this is in testing mode
+    view_case(case_num_pos, dates_ls_pos)
+    Sys.sleep(1)
+    
+    #### DATA COLLECTION: CASE DETAILS ####
+    # Collect FINANCIAL data
+    fin_data <- bind_rows(fin_data, get_financials(dates_ls_pos, case_num_pos))
+    print(paste0('Financial data retrieved from ', fin_data$case_number[case_num_pos], ' in month ', dates_filename))
+    
+    # Collect ADDRESS data
+    address_data <- bind_rows(address_data, get_addresses(dates_ls_pos, case_num_pos))
+    print(paste0('Address data retrieved from ', address_data$case_number[case_num_pos], ' in month ', dates_filename))
+    
+    # Increment the position in the case list
+    case_num_pos <- case_num_pos + 1
+    return_to_results(dates_ls_pos)
+  }
+  
+  #### DATA STORAGE ####
+  # Set a counter for the save file name
+  if (dates_ls_pos < 10){
+    dates_ls_pos_ch <- paste0("00", as.character(dates_ls_pos))
+  } else if (case_num_pos < 100) {
+    dates_ls_pos_ch <- paste0("0", as.character(dates_ls_pos))
+  } else {
+    dates_ls_pos_ch <- as.character(dates_ls_pos)
+  }
+  
+  # Store FINANCIALS data
+  write.csv(fin_data, paste0(path_to_monthly, '/financials/eviction_cases_', dates_filename, '.csv'))
+  
+  # Store ADDRESS data
+  write.csv(address_data, paste0(path_to_monthly, '/addresses/eviction_cases_', dates_filename, '.csv'))
+  
+  # Increment the dates position counter
+  dates_ls_pos <- dates_ls_pos + 1
+  return_to_search()
+}
+
+# Reset the date counter
+dates_ls_pos = 1
+
+# Turn off sink
+sink.reset()
+```
+
+## Work with downloaded info
+
+### Clean up and combine CSVs into a single file
+
+#### Basic info cleaning and combining
+
+```{r results='hide', message=FALSE}
+
+# Read in all CSVs
+all_cases_basic <- list.files(path_to_monthly, "/basic-info", 
+           "*.csv",
+           full.names=TRUE) %>%
+  map_dfr(read_csv) %>%
+  select(-'X1')
+
+# Clean up the combined dataframe
+all_cases_basic_clean <- all_cases_basic %>% 
+  # Drop empty columns
+  select(-`Citation Number`, -`Charge(s)`) %>%
+  # Break out date/location/officer
+  mutate(Date_Filed = str_sub(`Filed/Location/Judicial Officer`,1,10),
+         Location = str_sub(`Filed/Location/Judicial Officer`,11,20),
+         Judicial_Officer = str_sub(`Filed/Location/Judicial Officer`,21)
+  ) %>%
+  select(-`Filed/Location/Judicial Officer`) %>%
+  # Make everything lowercase
+  mutate_all(~tolower(.)) %>%
+  rename_all(~tolower(.)) %>%
+  # Split out plaintif / defendants
+  separate(col = `style/defendant info`,
+           into = c("plaintiff", "defendant"),
+           sep = "vs\\."
+  ) %>%
+  # Strip newlines and carriage returns
+  mutate_all(~str_replace_all(., "[\r\n]" , "")) %>%
+  # Clean up col names
+  rename_all(tolower) %>%
+  clean_names() %>%
+  mutate_all(~trimws(., "both"))
+
+
+```
+
+#### Store the combined basic data
+```{r}
+write.csv(all_cases_basic_clean, "data/eviction_cases_basic_jan2019_june2020.csv")
+```
+
+#### Detailed info cleaning and combining
+
+```{r results='hide', message=FALSE}
+
+# Read in all CSVs
+
+## Financials
+all_cases_fin <- list.files(path_to_monthly, "/financials", 
+           "*.csv",
+           full.names=TRUE) %>%
+  map_dfr(read_csv) %>%
+  select(-'X1') %>%
+  mutate_all(~trimws(., "both"))
+
+## Addresses
+all_cases_addresses <- list.files(path_to_monthly, "/addresses", 
+           "*.csv",
+           full.names=TRUE) %>%
+  map_dfr(read_csv) %>%
+  select(-'X1') %>%
+  mutate_all(~trimws(., "both"))
+
+
+```
+
+#### Store the combined detailed data in separate csvs
+```{r}
+write.csv(all_cases_fin, path_to_data_root, "/eviction_cases_financials_january2019_june2020.csv")
+write.csv(all_cases_addresses, path_to_data_root, "/eviction_cases_addresses_january2019_june2020.csv")
+
+  
+```
+
+#### Join cleaned + combined basic and detailed info into one data frame
+
+```{r}
+
+all_cases_detailed <- all_cases_basic_clean %>%
+  left_join(all_cases_fin) %>%
+  left_join(all_cases_addresses)
+
+write.csv(all_cases_detailed, path_to_data_root, "/eviction_cases_all_january2019_june2020.csv")
+
+```
+
+
+
+### Sanity checks 
+
+plaint_address == NA : 160
+def_address == NA : 192
+to_pay == NA : 92
+case_number duplicates in address pull : 3
+
+```{r}
+# sanity checks
+all_cases_detailed %>% 
+  group_by(case_number) %>% 
+  filter(is.na(case_number)) %>%
+  count()
+
+t <- read_csv(path_to_data_root, "/eviction_cases_financials_DATERANGE.csv")
+all_cases_addresses %>% group_by(case_number) %>%
+  count() %>%
+  filter(n>1) %>%
+  nrow()
+
+t <- read_csv(path_to_data_root, "/eviction_cases_financials_DATERANGE.csv") %>%
+  select(-"X1") %>%
+  full_join(read_csv(path_to_data_root, "/eviction_cases_addresses_DATERANGE.csv"), by= c("case_number" = "case_num")) %>%
+  select(-"X1")
+t %>% filter(is.na(def_address))
+
+# Drop duplicate case numbers or figure out why they get generated during the failsafe reloop.
+
+```
+### View details about a single case
+```{r}
+# Enter a date range
+enter_date_range(1)
+view_case(1,1)
+```
+
+## Cleanup
+
+```{r}
+# Stop the server
+rD1$server$stop()
+
+```
